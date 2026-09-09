@@ -1,6 +1,6 @@
 """Hyperparameter tuning and grid search for Tier-2 detector thresholds.
 
-Explores combinations of query_rate, input_entropy, and low_conf_rate
+Explores combinations of query_rate_fraction, input_entropy, and low_conf_rate
 thresholds on calibration logs ('cal_*') and ranks them by F1 score.
 
 CRITICAL FIREWALL RULE:
@@ -30,11 +30,9 @@ if str(DETECTOR_DIR) not in sys.path:
 from eval.metrics import evaluate_detections, load_keys_ground_truth
 from detector.adapter import load_calibration_logs
 from detector.features import compute_account_features
-from detector.tier2_perclient import Tier2Thresholds, detect_accounts
 from detector.tier2_perclient import Tier2Thresholds, detect_accounts, load_tier_limits
 
 
-DEFAULT_QUERY_RATES = [15.0, 20.0, 25.0, 30.0, 40.0]
 DEFAULT_QUERY_RATE_FRACTIONS = [0.2, 0.3, 0.4, 0.5, 0.6, 0.8]
 DEFAULT_INPUT_ENTROPIES = [0.03, 0.05, 0.08, 0.12]
 DEFAULT_LOW_CONF_RATES = [0.25, 0.35, 0.45, 0.55]
@@ -56,7 +54,6 @@ def grid_search_thresholds(
     Args:
         logs_df: Calibration logs in detector format (from load_calibration_logs).
         keys_df: Ground truth keys table from load_keys_ground_truth.
-        query_rates: List of query_rate thresholds to try.
         query_rate_fractions: List of query_rate_fraction thresholds to try.
         query_rates: Alias for query_rate_fractions.
         input_entropies: List of input_entropy thresholds to try.
@@ -68,7 +65,6 @@ def grid_search_thresholds(
     Returns:
         pd.DataFrame of all combinations sorted by F1 descending.
     """
-    qr_grid = query_rates if query_rates is not None else DEFAULT_QUERY_RATES
     qr_grid = (
         query_rate_fractions
         if query_rate_fractions is not None
@@ -80,7 +76,6 @@ def grid_search_thresholds(
     if logs_df.empty:
         return pd.DataFrame(
             columns=[
-                "query_rate",
                 "query_rate_fraction",
                 "input_entropy",
                 "low_conf_rate",
@@ -115,7 +110,6 @@ def grid_search_thresholds(
 
     for qr, ie, lc in itertools.product(qr_grid, ie_grid, lc_grid):
         cfg = Tier2Thresholds(
-            query_rate=float(qr),
             query_rate_fraction=float(qr),
             input_entropy=float(ie),
             low_conf_rate=float(lc),
@@ -123,20 +117,19 @@ def grid_search_thresholds(
 
         f_df = features.copy()
         rate_threshold = account_limits * cfg.query_rate_fraction
-        f_df["flagged"] = (
-            (f_df["low_conf_rate"] > cfg.low_conf_rate)
-            | (
-                (f_df["query_rate"] > cfg.query_rate)
-                (f_df["query_rate"] > rate_threshold)
-                & (f_df["input_entropy"] < cfg.input_entropy)
-            )
+        has_multiple_queries = f_df["query_rate"].notna() & f_df["input_entropy"].notna()
+        joint_rate_entropy = (
+            has_multiple_queries
+            & (f_df["query_rate"] > rate_threshold)
+            & (f_df["input_entropy"] < cfg.input_entropy)
         )
+        low_conf = f_df["low_conf_rate"].notna() & (f_df["low_conf_rate"] > cfg.low_conf_rate)
+        f_df["flagged"] = low_conf | joint_rate_entropy
 
         metrics = evaluate_detections(f_df, keys_df)
 
         rows.append(
             {
-                "query_rate": float(qr),
                 "query_rate_fraction": float(qr),
                 "input_entropy": float(ie),
                 "low_conf_rate": float(lc),
@@ -171,9 +164,6 @@ def signal_contribution(
     For each of the three signals (query_rate, input_entropy, low_conf_rate),
     runs detection with only that signal active — the other two are disabled
     by setting their thresholds to impossible values that can never fire:
-      - query_rate disabled:   threshold = inf  (nothing > inf)
-      - input_entropy disabled: threshold = -1   (nothing < -1)
-      - low_conf_rate disabled: threshold = inf  (nothing > inf)
       - query_rate_fraction disabled: threshold = inf  (nothing > inf)
       - input_entropy disabled:       threshold = -1   (nothing < -1)
       - low_conf_rate disabled:       threshold = inf  (nothing > inf)
@@ -194,7 +184,6 @@ def signal_contribution(
         return pd.DataFrame(
             columns=[
                 "signal",
-                "query_rate_thresh",
                 "query_rate_fraction_thresh",
                 "input_entropy_thresh",
                 "low_conf_rate_thresh",
@@ -225,14 +214,8 @@ def signal_contribution(
     INF = float("inf")
     DISABLED_ENTROPY = -1.0  # input_entropy is always >= 0
 
-    # Each entry: (label, query_rate_thresh, input_entropy_thresh, low_conf_rate_thresh)
     # Each entry: (label, query_rate_fraction_thresh, input_entropy_thresh, low_conf_rate_thresh)
     configs = [
-        ("query_rate only",   DEFAULT_QUERY_RATES[0],  DISABLED_ENTROPY, INF),
-        ("input_entropy only", INF,                     DEFAULT_INPUT_ENTROPIES[1], INF),
-        ("low_conf_rate only", INF,                     DISABLED_ENTROPY, DEFAULT_LOW_CONF_RATES[0]),
-        ("all_combined",       DEFAULT_QUERY_RATES[0],  DEFAULT_INPUT_ENTROPIES[1], DEFAULT_LOW_CONF_RATES[0]),
-        ("none (baseline)",    INF,                     DISABLED_ENTROPY, INF),
         ("query_rate only",   DEFAULT_QUERY_RATE_FRACTIONS[3], DISABLED_ENTROPY, INF),
         ("input_entropy only", INF,                            DEFAULT_INPUT_ENTROPIES[1], INF),
         ("low_conf_rate only", INF,                            DISABLED_ENTROPY, DEFAULT_LOW_CONF_RATES[0]),
@@ -244,19 +227,19 @@ def signal_contribution(
     for label, qr, ie, lc in configs:
         f_df = features.copy()
         rate_threshold = account_limits * qr
-        f_df["flagged"] = (
-            (f_df["low_conf_rate"] > lc)
-            | (
-                (f_df["query_rate"] > qr)
-                (f_df["query_rate"] > rate_threshold)
-                & (f_df["input_entropy"] < ie)
-            )
+        has_multiple_queries = f_df["query_rate"].notna() & f_df["input_entropy"].notna()
+        joint_rate_entropy = (
+            has_multiple_queries
+            & (f_df["query_rate"] > rate_threshold)
+            & (f_df["input_entropy"] < ie)
         )
+        low_conf = f_df["low_conf_rate"].notna() & (f_df["low_conf_rate"] > lc)
+        f_df["flagged"] = low_conf | joint_rate_entropy
+
         metrics = evaluate_detections(f_df, keys_df)
         rows.append(
             {
                 "signal": label,
-                "query_rate_thresh": qr,
                 "query_rate_fraction_thresh": qr,
                 "input_entropy_thresh": ie,
                 "low_conf_rate_thresh": lc,
@@ -309,12 +292,6 @@ def fpr_by_tier(
     results = detect_accounts(logs_df, thresholds=cfg)
     merged = results.copy()
 
-    # Get the dominant tier per account from the logs
-    account_tiers = (
-        logs_df.groupby("account_id")["tier"]
-        .agg(lambda s: s.mode().iloc[0])
-        .reset_index()
-    )
     if "tier" not in merged.columns:
         if "tier" in logs_df.columns:
             account_tiers = (
@@ -326,9 +303,6 @@ def fpr_by_tier(
         else:
             merged["tier"] = "free"
     merged["tier"] = merged["tier"].fillna("free").astype(str)
-
-    # Merge tier into results
-    merged = results.merge(account_tiers, on="account_id", how="left")
 
     # Merge ground truth
     df_keys = keys_df.copy()
@@ -404,7 +378,6 @@ if __name__ == "__main__":
     print("Top 10 Threshold Combinations (Ranked by F1 Descending):")
     print("-" * 70)
     display_cols = [
-        "query_rate",
         "query_rate_fraction",
         "input_entropy",
         "low_conf_rate",
@@ -424,7 +397,6 @@ if __name__ == "__main__":
     best = grid_results.iloc[0]
     print("SINGLE BEST THRESHOLD CONFIGURATION:")
     print("=" * 70)
-    print(f"  query_rate          : {best['query_rate']}")
     print(f"  query_rate_fraction : {best['query_rate_fraction']}")
     print(f"  input_entropy       : {best['input_entropy']}")
     print(f"  low_conf_rate       : {best['low_conf_rate']}")
@@ -471,4 +443,3 @@ if __name__ == "__main__":
     )
     print(tier_fmt.to_string(index=False))
     print("=" * 70)
-
