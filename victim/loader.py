@@ -54,31 +54,13 @@ _backend: str | None = None
 def decode_image(raw: bytes) -> np.ndarray:
     """Raw upload bytes -> float32 array (3, 32, 32), values 0..1.
 
-    Anything unreadable raises ValueError, which the API turns into a clean
-    400. This is the front line of the Stage 9 robustness work: a truncated
-    PNG, a PDF renamed to .png, or 3MB of zeroes all land here.
-
-    Images that aren't 32x32 are resized rather than rejected. Honest
-    customers send whatever they have; making that their problem would be a
-    false positive dressed up as validation.
+    Delegates to api/validate.py so there is exactly one definition of what
+    counts as an acceptable image. Raises ValidationError, which the API
+    turns into a clean error with a machine tag for column 8.
     """
-    from PIL import Image
+    from api.validate import decode_image_array
 
-    if not raw:
-        raise ValueError("empty image")
-
-    try:
-        img = Image.open(io.BytesIO(raw))
-        img.load()          # Image.open is lazy; this is what actually decodes
-    except Exception as exc:  # noqa: BLE001 -- any decode failure is a bad image
-        raise ValueError("could not decode image") from exc
-
-    img = img.convert("RGB")
-    if img.size != (IMAGE_SIZE, IMAGE_SIZE):
-        img = img.resize((IMAGE_SIZE, IMAGE_SIZE), Image.BILINEAR)
-
-    arr = np.asarray(img, dtype=np.float32) / 255.0     # (32, 32, 3)
-    return np.transpose(arr, (2, 0, 1)).copy()          # (3, 32, 32)
+    return decode_image_array(raw, IMAGE_SIZE)
 
 
 def normalize(x: np.ndarray) -> np.ndarray:

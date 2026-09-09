@@ -31,8 +31,6 @@ Run it:
 
 from __future__ import annotations
 
-import base64
-import binascii
 import json
 import os
 import sys
@@ -48,6 +46,7 @@ sys.path.insert(0, str(ROOT))
 
 from api.keys import KeyRegistry, RateLimiter, load_tiers  # noqa: E402
 from api.logstore import LogStore, encode_embedding, encode_probs  # noqa: E402
+from api.validate import ValidationError, extract_image_bytes  # noqa: E402
 from victim import loader  # noqa: E402
 from victim.embed import Projection  # noqa: E402
 
@@ -177,54 +176,6 @@ async def authenticate(request: Request,
     return caller
 
 
-async def read_image(request: Request) -> bytes:
-    """Accept a multipart upload or {"image_b64": "..."}.
-
-    We dispatch on Content-Type by hand rather than declaring both a File and
-    a Body parameter: FastAPI cannot have both on one route, because
-    declaring File() forces the whole endpoint to expect multipart.
-
-    Every failure raises ValueError carrying a short machine tag, which
-    becomes column 8.
-    """
-    ctype = (request.headers.get("content-type") or "").lower()
-
-    if ctype.startswith("multipart/form-data"):
-        form = await request.form()
-        upload = form.get("file")
-        if upload is None or isinstance(upload, str):
-            raise ValueError("empty_body")
-        raw = await upload.read()
-        if len(raw) > MAX_UPLOAD:
-            raise ValueError("payload_too_large")
-        if not raw:
-            raise ValueError("empty_body")
-        return raw
-
-    body = await request.body()
-    if len(body) > MAX_UPLOAD * 4 // 3 + 1024:
-        raise ValueError("payload_too_large")
-    if not body:
-        raise ValueError("empty_body")
-
-    if ctype.startswith("application/json"):
-        try:
-            payload = json.loads(body)
-        except json.JSONDecodeError as exc:
-            raise ValueError("bad_json") from exc
-        if not isinstance(payload, dict) or "image_b64" not in payload:
-            raise ValueError("empty_body")
-        b64 = payload["image_b64"]
-        if not isinstance(b64, str) or not b64:
-            raise ValueError("bad_image")
-        try:
-            return base64.b64decode(b64, validate=True)
-        except (binascii.Error, ValueError) as exc:
-            raise ValueError("bad_base64") from exc
-
-    return body   # raw bytes with some other content type
-
-
 # ------------------------------------------------------------------ routes
 
 @app.post("/predict")
@@ -232,21 +183,20 @@ async def predict(request: Request, caller: Caller = Depends(authenticate)):
     t0 = time.perf_counter()
 
     try:
-        raw = await read_image(request)
-    except ValueError as exc:
-        code = str(exc)
-        status = 413 if code == "payload_too_large" else 400
-        write_row(caller, status, (time.perf_counter() - t0) * 1000, error_code=code)
-        raise HTTPException(status_code=status, detail=code)
+        raw = await extract_image_bytes(request, MAX_UPLOAD)
+    except ValidationError as exc:
+        write_row(caller, exc.status, (time.perf_counter() - t0) * 1000,
+                  error_code=exc.code)
+        raise HTTPException(status_code=exc.status, detail=exc.code)
 
     digest, size = loader.image_hash(raw), len(raw)
 
     try:
         probs, feats = loader.predict([raw], backend=BACKEND)
-    except ValueError:
-        write_row(caller, 400, (time.perf_counter() - t0) * 1000,
-                  error_code="bad_image", input_sha256=digest, input_bytes=size)
-        raise HTTPException(status_code=400, detail="bad_image")
+    except ValidationError as exc:
+        write_row(caller, exc.status, (time.perf_counter() - t0) * 1000,
+                  error_code=exc.code, input_sha256=digest, input_bytes=size)
+        raise HTTPException(status_code=exc.status, detail=exc.code)
 
     p = probs[0]
     point = PROJECTION.one(feats[0]) if PROJECTION is not None else None
