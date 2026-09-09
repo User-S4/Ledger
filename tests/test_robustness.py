@@ -117,19 +117,27 @@ def test_same_bytes_same_answer(api):
 
 # ------------------------------------- inconvenient but honest images
 
-@pytest.mark.parametrize("name,raw", [
-    ("large photo",     png(10, (400, 300))),
-    ("1x1 pixel",       png(11, (1, 1))),
-    ("tall strip",      png(12, (8, 512))),
-    ("grayscale png",   png(13, mode="L")),
-    ("transparent png", png(14, mode="RGBA")),
-    ("jpeg",            png(15, fmt="JPEG")),
-    ("bmp",             png(16, fmt="BMP")),
-    ("webp",            png(17, fmt="WEBP")),
-])
-def test_honest_images_are_accepted(api, name, raw):
+# Parameters are short NAMES, never raw bytes. pytest builds test ids from
+# the parameters and puts them in an environment variable; on Windows that
+# has a 32767-character limit, so passing image bytes here blows up the
+# whole session before a single test runs.
+HONEST_IMAGES = {
+    "large_photo":     lambda: png(10, (400, 300)),
+    "one_pixel":       lambda: png(11, (1, 1)),
+    "tall_strip":      lambda: png(12, (8, 512)),
+    "grayscale_png":   lambda: png(13, mode="L"),
+    "transparent_png": lambda: png(14, mode="RGBA"),
+    "jpeg":            lambda: png(15, fmt="JPEG"),
+    "bmp":             lambda: png(16, fmt="BMP"),
+    "webp":            lambda: png(17, fmt="WEBP"),
+}
+
+
+@pytest.mark.parametrize("name", sorted(HONEST_IMAGES))
+def test_honest_images_are_accepted(api, name):
     """Rejecting these would be a false positive, not security."""
     client, key = api
+    raw = HONEST_IMAGES[name]()
     r = post(client, key, files={"file": ("a.img", raw, "application/octet-stream")})
     assert r.status_code == 200, f"{name} was refused: {r.text[:200]}"
 
@@ -160,29 +168,33 @@ def test_key_in_wrong_header_is_rejected(api):
 
 # ------------------------------------------------------------------ malformed
 
-@pytest.mark.parametrize("name,kwargs,status", [
-    ("empty json body",   dict(json={}), 400),
-    ("json without key",  dict(json={"wrong_field": "x"}), 400),
-    ("null image",        dict(json={"image_b64": None}), 400),
-    ("number image",      dict(json={"image_b64": 12345}), 400),
-    ("list image",        dict(json={"image_b64": [1, 2, 3]}), 400),
-    ("empty string",      dict(json={"image_b64": ""}), 400),
-    ("not base64",        dict(json={"image_b64": "!!!not base64!!!"}), 400),
-    ("base64 of text",    dict(json={"image_b64": base64.b64encode(b"hello").decode()}), 400),
-    ("empty file",        dict(files={"file": ("a.png", b"", "image/png")}), 400),
-    ("text as png",       dict(files={"file": ("a.png", b"hello world", "image/png")}), 400),
-    ("truncated png",     dict(files={"file": ("a.png", png(30)[:40], "image/png")}), 400),
-    ("header only",       dict(files={"file": ("a.png", png(31)[:8], "image/png")}), 400),
-    ("pdf as png",        dict(files={"file": ("a.png", b"%PDF-1.4\n%...", "image/png")}), 400),
-    ("html as png",       dict(files={"file": ("a.png", b"<html><body>x", "image/png")}), 400),
-    ("zip as png",        dict(files={"file": ("a.png", b"PK\x03\x04" + b"\x00" * 60, "image/png")}), 400),
-    ("random bytes",      dict(files={"file": ("a.bin", bytes(range(256)) * 4, "image/png")}), 400),
-    ("null bytes",        dict(files={"file": ("a.png", b"\x00" * 5000, "image/png")}), 400),
-    ("giant payload",     dict(files={"file": ("a.png", b"\x00" * 3_000_000, "image/png")}), 413),
-])
-def test_malformed_input(api, name, kwargs, status):
+MALFORMED = {
+    "empty_json_body":  (lambda: dict(json={}), 400),
+    "json_without_key": (lambda: dict(json={"wrong_field": "x"}), 400),
+    "null_image":       (lambda: dict(json={"image_b64": None}), 400),
+    "number_image":     (lambda: dict(json={"image_b64": 12345}), 400),
+    "list_image":       (lambda: dict(json={"image_b64": [1, 2, 3]}), 400),
+    "empty_string":     (lambda: dict(json={"image_b64": ""}), 400),
+    "not_base64":       (lambda: dict(json={"image_b64": "!!!not base64!!!"}), 400),
+    "base64_of_text":   (lambda: dict(json={"image_b64": base64.b64encode(b"hello").decode()}), 400),
+    "empty_file":       (lambda: dict(files={"file": ("a.png", b"", "image/png")}), 400),
+    "text_as_png":      (lambda: dict(files={"file": ("a.png", b"hello world", "image/png")}), 400),
+    "truncated_png":    (lambda: dict(files={"file": ("a.png", png(30)[:40], "image/png")}), 400),
+    "header_only":      (lambda: dict(files={"file": ("a.png", png(31)[:8], "image/png")}), 400),
+    "pdf_as_png":       (lambda: dict(files={"file": ("a.png", b"%PDF-1.4\n%...", "image/png")}), 400),
+    "html_as_png":      (lambda: dict(files={"file": ("a.png", b"<html><body>x", "image/png")}), 400),
+    "zip_as_png":       (lambda: dict(files={"file": ("a.png", b"PK\x03\x04" + b"\x00" * 60, "image/png")}), 400),
+    "random_bytes":     (lambda: dict(files={"file": ("a.bin", bytes(range(256)) * 4, "image/png")}), 400),
+    "null_bytes":       (lambda: dict(files={"file": ("a.png", b"\x00" * 5000, "image/png")}), 400),
+    "giant_payload":    (lambda: dict(files={"file": ("a.png", b"\x00" * 3_000_000, "image/png")}), 413),
+}
+
+
+@pytest.mark.parametrize("name", sorted(MALFORMED))
+def test_malformed_input(api, name):
     client, key = api
-    r = post(client, key, **kwargs)
+    build, status = MALFORMED[name]
+    r = post(client, key, **build())
     assert r.status_code == status, f"{name}: got {r.status_code} - {r.text[:200]}"
     assert_no_leak(r)
 
