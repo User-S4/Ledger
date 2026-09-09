@@ -106,6 +106,23 @@ def compute_low_confidence_rate(
     )
 
 
+def extract_account_tier(
+    logs: pd.DataFrame,
+    *,
+    account_col: str = "account_id",
+    tier_col: str = "tier",
+) -> pd.Series:
+    """Return the tier for each account (defaulting to 'free' if missing)."""
+    if tier_col not in logs.columns:
+        unique_accounts = logs[account_col].unique()
+        return pd.Series("free", index=unique_accounts, name="tier")
+    return (
+        logs.groupby(account_col)[tier_col]
+        .agg(lambda s: s.mode().iloc[0] if len(s) > 0 else "free")
+        .rename("tier")
+    )
+
+
 def compute_account_features(
     logs: pd.DataFrame,
     *,
@@ -113,14 +130,17 @@ def compute_account_features(
     diversity_metric: str = "std",
 ) -> pd.DataFrame:
     """Compute all per-account features and return a single DataFrame."""
+    feature_series = [
+        compute_query_rate(logs),
+        compute_input_diversity(logs, metric=diversity_metric),
+        compute_consecutive_distances(logs),
+        compute_low_confidence_rate(logs, threshold=low_conf_threshold),
+        extract_account_tier(logs),
+    ]
     features = pd.concat(
-        [
-            compute_query_rate(logs),
-            compute_input_diversity(logs, metric=diversity_metric),
-            compute_consecutive_distances(logs),
-            compute_low_confidence_rate(logs, threshold=low_conf_threshold),
-        ],
+        feature_series,
         axis=1,
     )
+    features["tier"] = features["tier"].fillna("free")
     features.index.name = "account_id"
     return features.reset_index()

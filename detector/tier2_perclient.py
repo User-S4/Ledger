@@ -2,63 +2,108 @@
 
 from __future__ import annotations
 
+import os
+import sys
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import yaml
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from features import compute_account_features
+
+DEFAULT_TIERS: dict[str, float] = {"free": 60.0, "pro": 600.0, "enterprise": 6000.0}
+
+
+def load_tier_limits(config_path: str | Path | None = None) -> dict[str, float]:
+    """Load rate limits per tier from config.yaml's tiers section."""
+    cfg_path = Path(config_path or os.environ.get("LEDGER_CONFIG", ROOT / "config.yaml"))
+    if not cfg_path.is_absolute():
+        cfg_path = ROOT / cfg_path
+    if cfg_path.exists():
+        try:
+            with open(cfg_path) as f:
+                data = yaml.safe_load(f)
+            if data and isinstance(data.get("tiers"), dict):
+                return {str(k): float(v) for k, v in data["tiers"].items()}
+        except Exception:
+            pass
+    return dict(DEFAULT_TIERS)
 
 
 @dataclass(frozen=True)
 class Tier2Thresholds:
     """Configurable per-account feature thresholds."""
 
-    query_rate: float = 30.0
-    input_entropy: float = 0.05
-    low_conf_rate: float = 0.4
+    query_rate_fraction: float = 0.5
+    input_entropy: float = 0.03
+    low_conf_rate: float = 0.25
 
 
 def detect_accounts(
     logs: pd.DataFrame,
     *,
     thresholds: Tier2Thresholds | None = None,
+    query_rate_fraction_threshold: float | None = None,
     query_rate_threshold: float | None = None,
     input_entropy_threshold: float | None = None,
     low_conf_rate_threshold: float | None = None,
     low_conf_feature_threshold: float = 0.6,
+    tier_limits: dict[str, float] | None = None,
 ) -> pd.DataFrame:
     """
-    Flag accounts whose features exceed any configured threshold.
+    Flag accounts with high low-confidence traffic or a joint rate/diversity
+    signal crossing its configured thresholds.
 
-    Returns a DataFrame with account_id, feature values, and a boolean
-    ``flagged`` column. Thresholds can be passed via ``Tier2Thresholds`` or
-    individual keyword arguments (which override the dataclass defaults).
+    query_rate threshold is evaluated as a fraction of the account's tier limit
+    (e.g., query_rate > tier_limit * query_rate_fraction).
     """
     cfg = thresholds or Tier2Thresholds()
-    if query_rate_threshold is not None:
+    qr_frac = query_rate_fraction_threshold
+    if qr_frac is None and query_rate_threshold is not None:
+        qr_frac = query_rate_threshold if query_rate_threshold <= 1.0 else query_rate_threshold / 60.0
+
+    if qr_frac is not None:
         cfg = Tier2Thresholds(
-            query_rate=query_rate_threshold,
-            input_entropy=input_entropy_threshold or cfg.input_entropy,
-            low_conf_rate=low_conf_rate_threshold or cfg.low_conf_rate,
+            query_rate_fraction=qr_frac,
+            input_entropy=input_entropy_threshold if input_entropy_threshold is not None else cfg.input_entropy,
+            low_conf_rate=low_conf_rate_threshold if low_conf_rate_threshold is not None else cfg.low_conf_rate,
         )
     elif input_entropy_threshold is not None or low_conf_rate_threshold is not None:
         cfg = Tier2Thresholds(
-            query_rate=cfg.query_rate,
-            input_entropy=input_entropy_threshold or cfg.input_entropy,
-            low_conf_rate=low_conf_rate_threshold or cfg.low_conf_rate,
+            query_rate_fraction=cfg.query_rate_fraction,
+            input_entropy=input_entropy_threshold if input_entropy_threshold is not None else cfg.input_entropy,
+            low_conf_rate=low_conf_rate_threshold if low_conf_rate_threshold is not None else cfg.low_conf_rate,
         )
 
     features = compute_account_features(logs, low_conf_threshold=low_conf_feature_threshold)
 
+    limits = tier_limits or load_tier_limits()
+    free_limit = limits.get("free", 60.0)
+
+    if "tier" in features.columns:
+        tier_col = features["tier"].fillna("free").astype(str)
+        account_limits = tier_col.map(lambda t: limits.get(t, free_limit)).astype(float)
+    else:
+        account_limits = pd.Series(free_limit, index=features.index)
+
+    rate_threshold = account_limits * cfg.query_rate_fraction
+
     features["flagged"] = (
-        (features["query_rate"] > cfg.query_rate)
-        | (features["input_entropy"] < cfg.input_entropy)
-        | (features["low_conf_rate"] > cfg.low_conf_rate)
+        (features["low_conf_rate"] > cfg.low_conf_rate)
+        | (
+            (features["query_rate"] > rate_threshold)
+            & (features["input_entropy"] < cfg.input_entropy)
+        )
     )
 
     features["flag_reasons"] = features.apply(
-        lambda row: _reasons(row, cfg),
+        lambda row: _reasons(row, cfg, limits),
         axis=1,
     )
 
@@ -70,11 +115,20 @@ def flagged_account_ids(results: pd.DataFrame) -> list:
     return results.loc[results["flagged"], "account_id"].tolist()
 
 
-def _reasons(row: pd.Series, cfg: Tier2Thresholds) -> list[str]:
+def _reasons(
+    row: pd.Series,
+    cfg: Tier2Thresholds,
+    tier_limits: dict[str, float] | None = None,
+) -> list[str]:
+    limits = tier_limits or load_tier_limits()
+    free_lim = limits.get("free", 60.0)
+    tier_name = str(row.get("tier", "free"))
+    tier_lim = limits.get(tier_name, free_lim)
+    rate_thresh = tier_lim * cfg.query_rate_fraction
+
     reasons: list[str] = []
-    if row["query_rate"] > cfg.query_rate:
+    if row["query_rate"] > rate_thresh and row["input_entropy"] < cfg.input_entropy:
         reasons.append("high_query_rate")
-    if row["input_entropy"] < cfg.input_entropy:
         reasons.append("low_input_entropy")
     if row["low_conf_rate"] > cfg.low_conf_rate:
         reasons.append("high_low_conf_rate")
@@ -105,6 +159,8 @@ def _normal_user_rows(
                     query_input = (anchor + rng.normal(0, 0.02, size=dim)).tolist()
                 else:
                     query_input = (anchor + rng.normal(0, 0.06, size=dim)).tolist()
+            else:
+                query_input = (anchor + rng.normal(0, cluster_noise, size=dim)).tolist()
             rows.append(
                 {
                     "timestamp": base_time
@@ -206,7 +262,7 @@ def _make_distributed_attack_logs(rng: np.random.Generator) -> pd.DataFrame:
 def _run_scenario(label: str, logs: pd.DataFrame) -> None:
     results = detect_accounts(
         logs,
-        query_rate_threshold=25.0,
+        query_rate_fraction_threshold=0.4,
         input_entropy_threshold=0.08,
         low_conf_rate_threshold=0.35,
     )
