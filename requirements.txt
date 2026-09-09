@@ -1,0 +1,24 @@
+# P3 owns this file. Pinned on purpose -- a surprise upgrade on Day 3 is
+# not a debugging session anyone has time for.
+
+# API
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+pydantic==2.10.4
+PyYAML==6.0.2
+
+# numerics
+numpy==2.2.1
+pandas==2.2.3
+scikit-learn==1.6.0
+Pillow==11.1.0
+
+# victim model (CPU wheels)
+torch==2.5.1
+torchvision==0.20.1
+
+# clients and tests
+httpx==0.28.1
+requests==2.32.3
+pytest==8.3.4

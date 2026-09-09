@@ -1,0 +1,45 @@
+# Every threshold and seed in the project lives here.
+# P3 owns the structure of this file. P1 owns the values under `detector`.
+# Nothing that affects a reported number should be hard-coded in a .py file.
+# This is what lets P1 tune on one seed and report on another without
+# touching any code.
+
+run:
+  # cal_* = tuning runs. eval_* = reporting runs. See SCHEMA.md.
+  # Override at launch with: LEDGER_RUN_ID=eval_seed2
+  run_id: cal_seed1
+  db_path: data/ledger.db
+
+seeds:
+  calibration: 1
+  evaluation: 2
+
+victim:
+  backend: auto            # auto | torch | stub
+  projection: data/projection.npz
+  embed_dim: 32            # column 12 width, frozen by SCHEMA.md
+  num_classes: 10          # columns 13 and 14 width
+
+api:
+  host: 127.0.0.1
+  port: 8000
+  max_upload_bytes: 2097152      # 2 MB
+  require_key: true
+
+tiers:                     # requests per minute
+  free: 60
+  pro: 600
+  enterprise: 6000
+
+detector:                  # P1 owns these values
+  tier1:                   # P3's cheap identity checks, Stage 4
+    rate_window_s: 60
+    keys_per_subnet_notable: 25
+  tier2:
+    enabled: false
+  tier3:
+    enabled: false
+
+defense:                   # Stage 7, off until it exists
+  enabled: false
+  thresholds: [0.5, 0.7, 0.9]    # suspicion -> degradation level 1, 2, 3
