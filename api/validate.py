@@ -1,4 +1,4 @@
-"""Input validation. Stage 9, and a quarter of the score.
+"""Input Validation. Stage 9, and a quarter of the score.
 
 Everything that decides whether a request is acceptable lives here, so
 there is one place to test and one place to change. main.py calls
