@@ -1,0 +1,9 @@
+{
+  "source": "cifar10-test",
+  "backend": "auto",
+  "n_samples": 5000,
+  "in_dim": 64,
+  "out_dim": 32,
+  "whitened": true,
+  "variance_kept": 0.997981071472168
+}
