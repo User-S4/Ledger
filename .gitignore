@@ -37,3 +37,10 @@ dist/
 .vscode/
 *.swp
 *.swo
+
+# data
+data/*
+!data/.gitkeep
+!data/projection.npz
+!data/projection.json
+data/*_keys.json
