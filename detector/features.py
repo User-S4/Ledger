@@ -20,14 +20,16 @@ def compute_query_rate(
     """
     Queries per minute for each account.
 
-    Uses the span from first to last query per account. Accounts with a
-    single query are assigned a rate of 1.0 query/minute.
+    Uses the span from first to last query per account. Accounts with only
+    1 query have no valid time span to compute a rate, returning NaN.
     """
     ts = pd.to_datetime(logs[time_col])
     grouped = logs.assign(_ts=ts).groupby(account_col)["_ts"]
 
     counts = grouped.count()
-    spans_min = grouped.apply(lambda s: max((s.max() - s.min()).total_seconds() / 60.0, 1 / 60.0))
+    spans_min = grouped.apply(
+        lambda s: max((s.max() - s.min()).total_seconds() / 60.0, 1 / 60.0) if len(s) >= 2 else np.nan
+    )
 
     return (counts / spans_min).rename("query_rate")
 
@@ -40,7 +42,8 @@ def compute_input_diversity(
 ) -> pd.Series:
     """
     Input diversity per account, measured as mean std or variance across
-    embedding dimensions over all queries for that account.
+    embedding dimensions over all queries for that account. Accounts with only
+    1 query have no variance/diversity to measure, returning NaN.
     """
     if metric not in {"std", "var"}:
         raise ValueError("metric must be 'std' or 'var'")
@@ -48,7 +51,7 @@ def compute_input_diversity(
     def _diversity(group: pd.DataFrame) -> float:
         emb = _embeddings_from_logs(group)
         if emb.shape[0] < 2:
-            return 0.0
+            return np.nan
         per_dim = np.std(emb, axis=0) if metric == "std" else np.var(emb, axis=0)
         return float(np.mean(per_dim))
 
@@ -64,7 +67,7 @@ def compute_consecutive_distances(
 ) -> pd.Series:
     """
     Mean (or other aggregate) Euclidean distance between consecutive
-    query embeddings per account, ordered by timestamp.
+    query embeddings per account, ordered by timestamp. Accounts with < 2 queries return NaN.
     """
     if aggregate not in {"mean", "median", "max"}:
         raise ValueError("aggregate must be 'mean', 'median', or 'max'")
@@ -73,7 +76,7 @@ def compute_consecutive_distances(
         ordered = group.sort_values(time_col)
         emb = _embeddings_from_logs(ordered)
         if emb.shape[0] < 2:
-            return 0.0
+            return np.nan
         diffs = np.diff(emb, axis=0)
         dists = np.linalg.norm(diffs, axis=1)
         if aggregate == "mean":

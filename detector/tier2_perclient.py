@@ -94,13 +94,16 @@ def detect_accounts(
 
     rate_threshold = account_limits * cfg.query_rate_fraction
 
-    features["flagged"] = (
-        (features["low_conf_rate"] > cfg.low_conf_rate)
-        | (
-            (features["query_rate"] > rate_threshold)
-            & (features["input_entropy"] < cfg.input_entropy)
-        )
+    # Only evaluate query_rate and input_entropy on accounts with 2+ queries (non-NaN)
+    has_multiple_queries = features["query_rate"].notna() & features["input_entropy"].notna()
+    joint_rate_entropy = (
+        has_multiple_queries
+        & (features["query_rate"] > rate_threshold)
+        & (features["input_entropy"] < cfg.input_entropy)
     )
+    low_conf = features["low_conf_rate"].notna() & (features["low_conf_rate"] > cfg.low_conf_rate)
+
+    features["flagged"] = low_conf | joint_rate_entropy
 
     features["flag_reasons"] = features.apply(
         lambda row: _reasons(row, cfg, limits),
@@ -127,10 +130,14 @@ def _reasons(
     rate_thresh = tier_lim * cfg.query_rate_fraction
 
     reasons: list[str] = []
-    if row["query_rate"] > rate_thresh and row["input_entropy"] < cfg.input_entropy:
-        reasons.append("high_query_rate")
-        reasons.append("low_input_entropy")
-    if row["low_conf_rate"] > cfg.low_conf_rate:
+    qr = row.get("query_rate")
+    ie = row.get("input_entropy")
+    if pd.notna(qr) and pd.notna(ie):
+        if qr > rate_thresh and ie < cfg.input_entropy:
+            reasons.append("high_query_rate")
+            reasons.append("low_input_entropy")
+    lc = row.get("low_conf_rate")
+    if pd.notna(lc) and lc > cfg.low_conf_rate:
         reasons.append("high_low_conf_rate")
     return reasons
 
