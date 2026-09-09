@@ -24,6 +24,17 @@ from .splits import load_exam, load_split, load_surrogate
 from .train_clone import train_clone
 
 
+def _ip_for_key(key_index):
+    """One stable IP per account. Key 0 -> 198.51.0.0, key 1 -> 198.51.0.1 ...
+
+    198.51.100.0/24 is a documentation range (TEST-NET-2), so these can't
+    collide with a real address anyone might mistake them for. We spread
+    across the wider 198.51.x.x space only because 400 keys need more than
+    256 slots; the exact numbers don't matter, only that each key keeps one.
+    """
+    return f"198.51.{key_index // 256}.{key_index % 256}"
+
+
 def photos(pool, n, seed):
     return load_surrogate(n, seed=seed) if pool == "surrogate" \
         else load_split("attacker", n, seed=seed)
@@ -54,8 +65,11 @@ def main():
 
     if a.local:
         keys = [f"k_{10000 + j}" for j in range(a.n_keys)]
-        ip_for = (lambda i: f"198.51.{i % 256}.{(i // 256) % 256}") \
-            if a.spread_ip else None
+        # Each KEY gets one stable IP -- 400 accounts on 400 machines, reused
+        # across the run. Keying off the request index instead would give one
+        # IP per request, which no real attacker produces and which is itself
+        # a giveaway. The IP must map to the account, not the moment.
+        ip_for = (lambda i: _ip_for_key(i % len(keys))) if a.spread_ip else None
         answers, keys_used = run_session(
             imgs, key_for=lambda i: keys[i % len(keys)], service=victim,
             ip_for=ip_for,
@@ -63,8 +77,7 @@ def main():
     else:
         keys = load_key_secrets(a.keys)
         api = ApiTarget(url=a.url)
-        ip_for = (lambda i: f"198.51.{i % 256}.{(i // 256) % 256}") \
-            if a.spread_ip else None
+        ip_for = (lambda i: _ip_for_key(i % len(keys))) if a.spread_ip else None
         answers, keys_used = run_session(
             imgs, key_for=lambda i: keys[i % len(keys)], api=api, ip_for=ip_for,
             out_npz=f"attack/data/distributed_{a.pool}_{a.budget}.npz")
