@@ -1,0 +1,11 @@
+[
+  {
+    "tag": "distributed|attacker|400keys",
+    "n_queries": 20000,
+    "fidelity": 0.8863,
+    "clone_accuracy": 0.8791,
+    "victim_accuracy": 0.926,
+    "holdout_size": 10000,
+    "fidelity_gap": 0.04690000000000005
+  }
+]
