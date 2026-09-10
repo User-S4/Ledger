@@ -47,8 +47,25 @@ def random_png(seed: int, size: int = 32) -> bytes:
     return buf.getvalue()
 
 
+_SESSION: requests.Session | None = None
+
+
+def get_session() -> requests.Session:
+    """Reusable connection pool to avoid Windows socket exhaustion (WinError 10048)."""
+    global _SESSION
+    if _SESSION is None:
+        _SESSION = requests.Session()
+        adapter = requests.adapters.HTTPAdapter(
+            pool_connections=100, pool_maxsize=200, max_retries=3
+        )
+        _SESSION.mount("http://", adapter)
+        _SESSION.mount("https://", adapter)
+    return _SESSION
+
+
 def predict(raw: bytes, key: str, url: str = DEFAULT_URL,
-            ip: str | None = None, timeout: float = 30.0) -> tuple[int, dict]:
+            ip: str | None = None, timeout: float = 30.0,
+            session: requests.Session | None = None) -> tuple[int, dict]:
     """Send one image. Returns (status_code, body).
 
     `ip` sets X-Forwarded-For, which the API trusts -- that is how P4 makes
@@ -57,7 +74,8 @@ def predict(raw: bytes, key: str, url: str = DEFAULT_URL,
     headers = {"X-API-Key": key, "Content-Type": "application/json"}
     if ip:
         headers["X-Forwarded-For"] = ip
-    r = requests.post(
+    s = session or get_session()
+    r = s.post(
         f"{url.rstrip('/')}/predict",
         data=json.dumps({"image_b64": base64.b64encode(raw).decode()}),
         headers=headers,

@@ -7,7 +7,7 @@
 run:
   # cal_* = tuning runs. eval_* = reporting runs. See SCHEMA.md.
   # Override at launch with: LEDGER_RUN_ID=eval_seed2
-  run_id: cal_seed1
+  run_id: eval_seed2
   db_path: data/ledger.db
 
 seeds:

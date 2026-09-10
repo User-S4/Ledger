@@ -212,8 +212,8 @@ class LogStore:
         sql = "SELECT * FROM requests"
         params: list = []
         if run_id:
-            sql += " WHERE run_id = ?"
-            params.append(run_id)
+            sql += " WHERE (run_id = ? OR TRIM(run_id) = ?)"
+            params.extend([run_id, run_id.strip()])
         sql += " ORDER BY request_id"
 
         df = pd.read_sql_query(sql, self.conn, params=params)

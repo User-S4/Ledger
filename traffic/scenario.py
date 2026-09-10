@@ -47,11 +47,18 @@ from PIL import Image
 # regardless of where this script is run from.
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+TRAFFIC_DIR = Path(__file__).resolve().parent
+if str(TRAFFIC_DIR) not in sys.path:
+    sys.path.insert(0, str(TRAFFIC_DIR))
 
 from api.client import predict, random_png  # noqa: E402  (this IS the request format)
 
-from profiles import PROFILES
-from multitenant import office
+try:
+    from traffic.profiles import PROFILES
+    from traffic.multitenant import office
+except ImportError:
+    from profiles import PROFILES
+    from multitenant import office
 
 
 # ---------------------------------------------------------------------------

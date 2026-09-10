@@ -65,7 +65,7 @@ CFG = load_config()
 
 # Environment variables win, so P1 can switch runs without editing a file:
 #   LEDGER_RUN_ID=eval_seed2 python -m uvicorn api.main:app
-RUN_ID = os.environ.get("LEDGER_RUN_ID", CFG["run"]["run_id"])
+RUN_ID = os.environ.get("LEDGER_RUN_ID", CFG["run"]["run_id"]).strip()
 DB_PATH = os.environ.get("LEDGER_DB", CFG["run"]["db_path"])
 BACKEND = os.environ.get("LEDGER_BACKEND", CFG["victim"]["backend"])
 MAX_UPLOAD = int(CFG["api"]["max_upload_bytes"])

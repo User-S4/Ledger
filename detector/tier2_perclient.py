@@ -15,7 +15,14 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from features import compute_account_features
+DETECTOR_DIR = Path(__file__).resolve().parent
+if str(DETECTOR_DIR) not in sys.path:
+    sys.path.insert(0, str(DETECTOR_DIR))
+
+try:
+    from detector.features import compute_account_features
+except ImportError:
+    from features import compute_account_features
 
 DEFAULT_TIERS: dict[str, float] = {"free": 60.0, "pro": 600.0, "enterprise": 6000.0}
 
