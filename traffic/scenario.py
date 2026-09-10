@@ -133,23 +133,36 @@ def build_accounts(mix: list[dict], rng: random.Random, keys_files: list[str],
 
 
 # ---------------------------------------------------------------------------
-# Assigning simulated IPs per profile group, so different honest scenarios don't
-# all collapse onto whatever machine actually ran this script. Only meaningful
-# once the API is trusting X-Forwarded-For, which it already does (api/main.py).
+# Assigning simulated IPs. Confirmed working (P3): api/main.py trusts
+# X-Forwarded-For, api/client.py's predict(ip=...) sets it, no API change needed.
+#
+# FIXED (per P3's review): every individual account now gets its OWN IP, not one
+# shared IP per profile — two researchers sharing an IP by accident isn't
+# realistic and wasn't intentional. The ONE deliberate exception is `multitenant`:
+# every account in that group shares a single IP on purpose, since "many accounts,
+# one connection" is the entire point of that test.
 # ---------------------------------------------------------------------------
 
-def assign_ips(mix: list[dict], rng: random.Random) -> dict:
-    ips = {}
-    for entry in mix:
-        profile = entry["profile"]
-        if profile == "multitenant":
-            # office scenario supplies its own shared IP explicitly, see below
-            continue
-        ips[profile] = f"198.51.100.{rng.randint(2, 254)}"
-    return ips
-
-
 OFFICE_IP = "203.0.113.7"  # matches the example in api/client.py's own docstring
+
+
+def assign_ips(accounts_by_profile: dict, rng: random.Random) -> dict:
+    """Returns {api_key_id: ip}. Every account gets its own IP except multitenant."""
+    ip_by_key = {}
+    used = {OFFICE_IP}
+    for profile, accounts in accounts_by_profile.items():
+        if profile == "multitenant":
+            for account in accounts:
+                ip_by_key[account["api_key_id"]] = OFFICE_IP
+            continue
+        for account in accounts:
+            while True:
+                candidate = f"198.51.100.{rng.randint(2, 254)}"
+                if candidate not in used:
+                    used.add(candidate)
+                    break
+            ip_by_key[account["api_key_id"]] = candidate
+    return ip_by_key
 
 
 # ---------------------------------------------------------------------------
@@ -204,7 +217,7 @@ def main():
 
     rng = random.Random(seed)
     accounts_by_profile = build_accounts(cfg["mix"], rng, args.keys_file, args.stub_keys)
-    profile_ips = assign_ips(cfg["mix"], rng)
+    ip_by_key = assign_ips(accounts_by_profile, rng)
     events = build_events(cfg, accounts_by_profile, rng)
 
     print(f"Scenario: {cfg.get('run_label', args.scenario_file)}  seed={seed}  "
@@ -219,7 +232,7 @@ def main():
             time.sleep(target_real_elapsed - real_elapsed)
 
         img = image_for_event(rng, weird)
-        ip = OFFICE_IP if profile == "multitenant" else profile_ips[profile]
+        ip = ip_by_key[account["api_key_id"]]
 
         if args.dry_run:
             print(f"[dry-run] t={t_offset:8.1f}s  profile={profile:10s} "

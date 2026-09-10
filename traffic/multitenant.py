@@ -6,20 +6,12 @@ A whole office of DIFFERENT, legitimate accounts, all sharing one internet conne
 On the surface this looks like a distributed attack: many accounts, low volume each,
 one shared IP. The detector must NOT flag this.
 
-*** OPEN QUESTION FOR P3 / P1 — read before demo day, not during it ***
-SCHEMA.md: `ip` is written by the API from the real request. If this whole scenario
-runs as one script on one machine, EVERY profile in this folder — not just this one —
-lands on the API with the same real source IP, because they're all coming from one
-laptop. That makes "office, one IP" indistinguishable from "ordinary case" on the ip
-column in a same-machine demo, which defeats the point of this specific test.
-
-Two fixes, pick one with the team:
-  1. API accepts a trusted test-only header (e.g. X-Debug-IP) that overrides the
-     recorded ip in demo mode only, and scenario.py sends a distinct value per profile.
-  2. Actually run different profiles from different processes/hosts. More "real" but
-     costs setup time.
-Recommend option 1 — it's a few lines in api/main.py. Raise this at standup; it affects
-whether Stage 5 means anything, not just a nice-to-have.
+RESOLVED (confirmed with P3): api/main.py already trusts X-Forwarded-For as the
+recorded ip (SCHEMA.md column 6), and api/client.py's predict(ip=...) sets exactly
+that header. No API change needed. scenario.py gives every account in this scenario
+the SAME simulated IP on purpose — that's the entire point of this test — while every
+other profile gets its own distinct IP (see assign_ips() in scenario.py), so this
+scenario is actually distinguishable from "just a bunch of separate honest users."
 """
 
 import random
