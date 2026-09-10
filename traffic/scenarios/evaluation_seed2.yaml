@@ -1,0 +1,48 @@
+# scenarios/evaluation_seed2.yaml
+#
+# REPORTING ONLY. Different seed from calibration_seed1.yaml on purpose — this is the
+# fresh, untuned traffic that Stage 8 generates and the final numbers get reported
+# from. Per SCHEMA.md's run_id rule, the server run using this file must be tagged
+# run_id starting "eval_" (e.g. eval_seed2). Nobody should have looked at results from
+# this specific run while still tuning thresholds.
+#
+# Same shape as calibration_seed1.yaml on purpose, different seed — that's what makes
+# it a fair test rather than a different test.
+
+run_label: evaluation_seed2
+seed: 2
+duration_seconds: 3600
+speed: 50
+api_url: http://localhost:8000
+
+mix:
+  - profile: casual
+    accounts: 3
+    owner: casual
+    params:
+      rate_per_min: 2.0
+
+  - profile: batch
+    accounts: 1
+    owner: casual
+    params:
+      burst_size: 400
+
+  - profile: bursty
+    accounts: 1
+    owner: casual
+    params:
+      rate_per_min: 3.0
+      retry_chance: 0.15
+
+  - profile: researcher
+    accounts: 2
+    owner: casual
+    params:
+      rate_per_min: 1.0
+
+  - profile: multitenant
+    accounts: 25
+    owner: office_acme
+    params:
+      rate_per_min_per_account: 1.0

@@ -1,0 +1,49 @@
+# scenarios/calibration_seed1.yaml
+#
+# TUNING ONLY. Per SCHEMA.md's run_id rule, whatever server run uses this scenario
+# must be tagged run_id starting "cal_" (e.g. cal_seed1) — that tagging happens when
+# the API is started (P1/P3's call, likely inside run_demo.sh), not here. This file
+# only controls what traffic gets sent.
+#
+# Nothing reported in the final numbers may be quoted from a run that used this file.
+
+run_label: calibration_seed1
+seed: 1
+duration_seconds: 3600
+speed: 50            # 3600 simulated seconds compressed into 72 real seconds
+api_url: http://localhost:8000
+
+# owner: matches the ground-truth categories named in SCHEMA.md's `keys` table
+# (casual / office_acme / attacker_pool). Kept minimal on purpose — ask P1 before
+# splitting into finer per-profile owner tags.
+mix:
+  - profile: casual
+    accounts: 3
+    owner: casual
+    params:
+      rate_per_min: 2.0
+
+  - profile: batch
+    accounts: 1
+    owner: casual
+    params:
+      burst_size: 400
+
+  - profile: bursty
+    accounts: 1
+    owner: casual
+    params:
+      rate_per_min: 3.0
+      retry_chance: 0.15
+
+  - profile: researcher
+    accounts: 2
+    owner: casual
+    params:
+      rate_per_min: 1.0
+
+  - profile: multitenant
+    accounts: 25
+    owner: office_acme
+    params:
+      rate_per_min_per_account: 1.0
