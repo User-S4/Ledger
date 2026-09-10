@@ -216,6 +216,19 @@ def axis_spread(points) -> np.ndarray:
 # ------------------------------------------------------------------ CLI
 
 def _cmd_fit(a) -> None:
+    out = Path(a.out)
+    if out.exists() and not a.force:
+        raise SystemExit(
+            f"{out} already exists.\n\n"
+            "Refitting moves the survey grid. Every point logged under the old\n"
+            "one becomes incomparable to every point logged under the new one --\n"
+            "silently, with no error, because the numbers still look fine. P1's\n"
+            "map would be measuring two different spaces at once.\n\n"
+            "If you are sure, pass --force AND delete every log written under the\n"
+            "old grid. Otherwise leave it alone: this file is committed so the\n"
+            "whole team measures from the same origin."
+        )
+
     print("fitting the projection -- this takes a few minutes the first time\n",
           flush=True)
     if a.cifar:
@@ -291,6 +304,8 @@ def _main() -> None:
     f.add_argument("--dim", type=int, default=EMBED_DIM)
     f.add_argument("--no-whiten", action="store_true")
     f.add_argument("--out", default=DEFAULT_ARTIFACT)
+    f.add_argument("--force", action="store_true",
+                   help="overwrite an existing projection (see the warning)")
     f.set_defaults(func=_cmd_fit)
 
     d = sub.add_parser("diagnose", help="check P1's cell settings against logged points")
