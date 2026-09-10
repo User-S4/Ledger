@@ -121,6 +121,14 @@ class CellIndex:
         with self._lock:
             return len(self._first_seen)
 
+    def requests_for(self, api_key_id: str) -> int:
+        with self._lock:
+            return self._requests.get(api_key_id, 0)
+
+    def accounts(self) -> list:
+        with self._lock:
+            return list(self._by_key)
+
     def efficiency(self, api_key_id: str) -> float:
         """Requests spent per new cell. Low means almost nothing is repeated.
 
