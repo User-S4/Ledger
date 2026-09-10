@@ -326,3 +326,241 @@ def test_answer_key_stays_out_of_the_log(api):
     df = STORE.read_df(run_id=RUN_ID)
     assert "owner" not in df.columns
     assert "owner" in STORE.owners_df().columns
+
+
+# ------------------------------------------------------------------ load
+
+def test_logstore_loses_nothing_under_concurrent_writes(tmp_path):
+    """Many threads writing at once must lose nothing.
+
+    P2's attack and P4's traffic hit the API simultaneously from different
+    machines. Uvicorn handles those on separate threads, and they all share
+    one LogStore. A row lost here is invisible: no error, no crash, just a
+    log that quietly disagrees with what actually happened -- and every
+    number the team reports is computed from that log.
+    """
+    import threading
+
+    from api.logstore import LogStore
+
+    store = LogStore(tmp_path / "concurrent.db", batch_size=1)
+    threads, per_thread = 8, 500
+
+    def writer(worker: int) -> None:
+        for i in range(per_thread):
+            store.log(run_id="cal_load", ts=1000.0 + i,
+                      api_key_id=f"k_{worker:03d}", tier="free",
+                      ip=f"10.0.0.{worker}", status_code=200, latency_ms=1.0)
+
+    workers = [threading.Thread(target=writer, args=(w,)) for w in range(threads)]
+    for w in workers:
+        w.start()
+    for w in workers:
+        w.join()
+    store.flush()
+
+    df = store.read_df(run_id="cal_load")
+    assert len(df) == threads * per_thread, (
+        f"lost {threads * per_thread - len(df)} rows under concurrent writes")
+    assert df.api_key_id.nunique() == threads
+    assert df.request_id.is_unique, "duplicate primary keys"
+    store.close()
+
+
+def test_rate_limiter_is_exact_under_concurrent_callers():
+    """The limit must hold when many threads charge the same account.
+
+    A limiter that leaks under load lets an attacker exceed their tier by
+    sending faster -- which is precisely when it matters.
+    """
+    import threading
+
+    from api.keys import DEFAULT_TIERS, RateLimiter
+
+    lim = RateLimiter()
+    limit = DEFAULT_TIERS["pro"]
+    granted = []
+    lock = threading.Lock()
+
+    def hammer() -> None:
+        allowed = sum(lim.allow("k_shared", "pro", now=5000.0) for _ in range(400))
+        with lock:
+            granted.append(allowed)
+
+    workers = [threading.Thread(target=hammer) for _ in range(8)]
+    for w in workers:
+        w.start()
+    for w in workers:
+        w.join()
+
+    assert sum(granted) == limit, (
+        f"limiter granted {sum(granted)} of {limit} allowed under 8 threads")
+
+
+def test_api_handles_concurrent_requests(api):
+    """End to end: many clients at once, every response accounted for."""
+    import threading
+
+    from api.main import RUN_ID, STORE, REGISTRY
+
+    client, _ = api
+    keys = [k["secret"] for k in REGISTRY.provision(6, "enterprise", "load_test")]
+    before = len(STORE.read_df(run_id=RUN_ID))
+
+    results: list[int] = []
+    lock = threading.Lock()
+
+    def worker(idx: int) -> None:
+        codes = [post(client, keys[idx],
+                      files={"file": (f"a{i}.png", png(900 + idx * 50 + i), "image/png")}
+                      ).status_code for i in range(25)]
+        with lock:
+            results.extend(codes)
+
+    workers = [threading.Thread(target=worker, args=(i,)) for i in range(len(keys))]
+    for w in workers:
+        w.start()
+    for w in workers:
+        w.join()
+    STORE.flush()
+
+    assert len(results) == len(keys) * 25
+    assert all(c == 200 for c in results), f"non-200 under load: {set(results)}"
+
+    after = len(STORE.read_df(run_id=RUN_ID))
+    assert after - before == len(results), (
+        f"{len(results)} requests served but {after - before} rows logged")
+
+
+def test_cell_index_is_exact_under_concurrent_observers():
+    """The live tally must not drop or double-count under load."""
+    import threading
+
+    from detector.cell_index import CellIndex
+
+    index = CellIndex()
+    threads, per_thread = 8, 400
+
+    def worker(w: int) -> None:
+        for i in range(per_thread):
+            index.observe(f"k_{w}", (w, i % 40, 0, 0, 0, 0), 1000.0 + i * 0.01)
+
+    workers = [threading.Thread(target=worker, args=(w,)) for w in range(threads)]
+    for w in workers:
+        w.start()
+    for w in workers:
+        w.join()
+
+    snap = index.snapshot()
+    assert snap["requests_seen"] == threads * per_thread
+    assert snap["accounts_seen"] == threads
+    assert index.total_coverage() == threads * 40   # each thread visits 40 cells
+
+
+# ------------------------------------------------------------------ defence
+
+def test_degradation_never_changes_the_label():
+    """The one rule Stage 7 follows. We will sometimes be wrong about who is
+    hostile, and a service that lies to customers it wrongly suspects is
+    indefensible."""
+    from api.defense import degrade
+
+    rng = np.random.default_rng(0)
+    for _ in range(400):
+        p = rng.dirichlet(np.ones(10) * rng.uniform(0.2, 3.0))
+        winner = int(np.argmax(p))
+        for level in (0, 1, 2, 3):
+            out = degrade(p, level)
+            assert int(np.argmax(out)) == winner, f"level {level} changed the label"
+
+
+def test_degradation_always_returns_a_valid_distribution():
+    from api.defense import degrade
+
+    rng = np.random.default_rng(1)
+    for _ in range(400):
+        p = rng.dirichlet(np.ones(10) * rng.uniform(0.2, 3.0))
+        for level in (0, 1, 2, 3):
+            out = degrade(p, level)
+            assert len(out) == 10
+            assert abs(sum(out) - 1.0) < 1e-6, f"level {level} sums to {sum(out)}"
+            assert all(v >= 0.0 for v in out)
+
+
+def test_degradation_destroys_the_boundary_information():
+    """A near-tie is a coordinate on the decision boundary -- the thing a
+    clone is really copying. Degrading must make it unrecoverable.
+
+    The property that matters is collision: several queries with DIFFERENT
+    true margins must produce the SAME degraded answer. If they did not, the
+    thief could still tell them apart and the boundary would survive.
+    """
+    from api.defense import degrade
+
+    def near_tie(margin):
+        p = np.full(10, 0.02)
+        p[2] = 0.30 + margin / 2
+        p[3] = 0.30 - margin / 2
+        return p / p.sum()
+
+    margins = [0.004, 0.012, 0.021, 0.030]
+    for level in (1, 2, 3):
+        outs = {tuple(np.round(degrade(near_tie(m), level), 6)) for m in margins}
+        assert len(outs) == 1, (
+            f"level {level} still distinguishes margins {margins}: {len(outs)} "
+            f"distinct answers")
+
+    # ...and untouched, they are all clearly different.
+    raw = {tuple(np.round(degrade(near_tie(m), 0), 6)) for m in margins}
+    assert len(raw) == len(margins)
+
+
+def test_level_thresholds():
+    from api.defense import level_for_score
+
+    assert level_for_score(None) == 0
+    assert level_for_score(0.0) == 0
+    assert level_for_score(0.49) == 0
+    assert level_for_score(0.5) == 1
+    assert level_for_score(0.7) == 2
+    assert level_for_score(0.95) == 3
+
+
+def test_defence_is_off_until_enabled():
+    """Nothing degrades until the team switches it on."""
+    from api.defense import DefensePolicy
+
+    policy = DefensePolicy(scorer=lambda k: 0.99, enabled=False)
+    probs = [0.5, 0.2, 0.1, 0.05, 0.05, 0.03, 0.03, 0.02, 0.01, 0.01]
+    out, level, score = policy.apply("k_1", probs)
+    assert level == 0
+    assert out == probs
+
+
+def test_defence_rises_at_once_and_falls_slowly():
+    """Hysteresis. Without it an account flips level request by request, and
+    the flipping itself tells a thief where the threshold sits."""
+    from api.defense import DefensePolicy
+
+    score = {"v": 0.95}
+    policy = DefensePolicy(scorer=lambda k: score["v"], cooldown_s=100.0,
+                           enabled=True)
+
+    assert policy.level_for("k_1", score["v"], now=0.0) == 3
+    score["v"] = 0.0
+    assert policy.level_for("k_1", score["v"], now=10.0) == 3    # still hot
+    assert policy.level_for("k_1", score["v"], now=99.0) == 3
+    assert policy.level_for("k_1", score["v"], now=101.0) == 0   # cooled down
+
+
+def test_defence_scores_accounts_independently():
+    from api.defense import DefensePolicy
+
+    scores = {"k_bad": 0.95, "k_good": 0.05}
+    policy = DefensePolicy(scorer=lambda k: scores[k], enabled=True)
+    probs = [0.4, 0.3, 0.1, 0.05, 0.05, 0.03, 0.03, 0.02, 0.01, 0.01]
+
+    bad_out, bad_level, _ = policy.apply("k_bad", probs)
+    good_out, good_level, _ = policy.apply("k_good", probs)
+    assert bad_level == 3 and good_level == 0
+    assert good_out == probs
