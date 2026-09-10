@@ -39,7 +39,7 @@ class LocalService:
     def __init__(self, arch="cifar10_resnet20", device=None):
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.model = torch.hub.load(
-            "chenyaofo/pytorch-cifar-models", arch, pretrained=True
+            "chenyaofo/pytorch-cifar-models", arch, pretrained=True, trust_repo=True
         ).to(self.device).eval()
         self.norm = "dataset_stats"
         self.degradation_level = 0   # Stage 7 raises this

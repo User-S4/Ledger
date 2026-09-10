@@ -55,7 +55,7 @@ def build_student(arch="cifar10_resnet20"):
     Swap arch (e.g. 'cifar10_mobilenetv2_x0_5', 'cifar10_vgg11_bn') to show the
     thief doesn't need to know how the victim was built.
     """
-    return torch.hub.load("chenyaofo/pytorch-cifar-models", arch, pretrained=False)
+    return torch.hub.load("chenyaofo/pytorch-cifar-models", arch, pretrained=False, trust_repo=True)
 
 
 def soft_label_loss(student_logits, victim_probs, temperature=1.0):
