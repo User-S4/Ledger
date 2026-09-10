@@ -106,7 +106,7 @@ def load_real_logs(
 
     # Filter by run_id if provided (in case read_df was not passed run_id)
     if run_id is not None and "run_id" in df.columns:
-        df = df[df["run_id"] == run_id]
+        df = df[df["run_id"].astype(str).str.strip() == run_id.strip()]
 
     if df.empty:
         return pd.DataFrame(columns=EXPECTED_DETECTOR_COLS)
