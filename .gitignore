@@ -44,3 +44,6 @@ data/*
 !data/projection.npz
 !data/projection.json
 data/*_keys.json
+*.tar.gz
+*.zip
+attack/data/mixed_*.npz

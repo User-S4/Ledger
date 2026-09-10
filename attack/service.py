@@ -134,13 +134,37 @@ class RemoteService:
         }
 
 
-def _degrade(probs, level, dp=(None, 3, 2, 1)):
-    """Stage 7, previewed locally so that stage is an afternoon, not a day.
+ROUND_TO = 0.1
+TOP_K_AT_LEVEL_2 = 3
 
-    Level 0 returns the honest answer. Higher levels round the numbers off,
-    which strips out the fine detail a thief learns the most from.
-    """
+def _degrade_one(probs, level):
+    """Person 3's api/defense.py degrade(), copied so attack/ runs standalone.
+    Keep in sync if they change it."""
+    p = np.asarray(probs, dtype=np.float64).reshape(-1)
+    if level <= 0:
+        return p
+    winner = int(np.argmax(p))
+    if level in (1, 2):
+        out = p.copy()
+        if level == 2:
+            keep = np.argsort(out)[::-1][:TOP_K_AT_LEVEL_2]
+            kept = np.zeros_like(out)
+            kept[keep] = out[keep]
+            out = kept + (1.0 - kept.sum()) / len(out)
+        out = np.clip(np.round(out / ROUND_TO) * ROUND_TO, 0.0, 1.0)
+        if out.sum() <= 0:
+            out = np.zeros_like(p); out[winner] = 1.0
+            return out
+        out = out / out.sum()
+        if int(np.argmax(out)) != winner or out[winner] < out.max():
+            out[winner] = out.max() + ROUND_TO
+            out = out / out.sum()
+        return out
+    out = np.zeros_like(p); out[winner] = 1.0
+    return out
+
+
+def _degrade(probs, level):
     if level == 0:
         return probs
-    r = np.round(probs, dp[level])
-    return (r / np.clip(r.sum(axis=1, keepdims=True), 1e-9, None)).astype(np.float32)
+    return np.array([_degrade_one(p, level) for p in probs], dtype=np.float32)
