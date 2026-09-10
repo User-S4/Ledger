@@ -47,6 +47,10 @@ sys.path.insert(0, str(ROOT))
 from api.keys import KeyRegistry, RateLimiter, load_tiers  # noqa: E402
 from api.logstore import LogStore, encode_embedding, encode_probs  # noqa: E402
 from api.validate import ValidationError, extract_image_bytes  # noqa: E402
+from api.defense import build_policy  # noqa: E402
+from detector.cell_index import CellIndex  # noqa: E402
+from detector.cells import assign_cell  # noqa: E402
+from detector.tier3_ledger import Tier3Config, score_from_index  # noqa: E402
 from victim import loader  # noqa: E402
 from victim.embed import Projection  # noqa: E402
 
@@ -65,7 +69,7 @@ CFG = load_config()
 
 # Environment variables win, so P1 can switch runs without editing a file:
 #   LEDGER_RUN_ID=eval_seed2 python -m uvicorn api.main:app
-RUN_ID = os.environ.get("LEDGER_RUN_ID", CFG["run"]["run_id"]).strip()
+RUN_ID = os.environ.get("LEDGER_RUN_ID", CFG["run"]["run_id"])
 DB_PATH = os.environ.get("LEDGER_DB", CFG["run"]["db_path"])
 BACKEND = os.environ.get("LEDGER_BACKEND", CFG["victim"]["backend"])
 MAX_UPLOAD = int(CFG["api"]["max_upload_bytes"])
@@ -75,6 +79,27 @@ TIERS = load_tiers(CFG)
 STORE = LogStore(DB_PATH, batch_size=1)
 REGISTRY = KeyRegistry(STORE, TIERS)
 LIMITER = RateLimiter(TIERS)
+
+# ---- Stage 6 + 7: the live ledger and the fightback --------------------
+# The tally has to be current DURING a request, because that is when the
+# defence decides whether to degrade. A batch job that reads the log
+# afterwards is fine for P1's analysis and useless here.
+_T3 = (CFG.get("detector", {}) or {}).get("tier3", {}) or {}
+TIER3_CFG = Tier3Config(
+    cell_size=float(_T3.get("cell_size", 1.0)),
+    dims=_T3.get("dims", 8),
+    rate_reference=float(_T3.get("rate_reference", 20.0)),
+    coverage_reference=float(_T3.get("coverage_reference", 0.25)),
+    min_requests=int(_T3.get("min_requests", 30)),
+)
+TIER3_ENABLED = bool(_T3.get("enabled", False))
+CELL_INDEX = CellIndex()
+
+DEFENSE = build_policy(
+    CFG,
+    scorer=(lambda key: score_from_index(CELL_INDEX, key, cfg=TIER3_CFG))
+    if TIER3_ENABLED else None,
+)
 
 _proj_path = ROOT / CFG["victim"]["projection"]
 PROJECTION = Projection.load(_proj_path) if _proj_path.exists() else None
@@ -91,6 +116,33 @@ async def lifespan(_app: FastAPI):
     print(f"[api] run_id={RUN_ID}  db={DB_PATH}")
     print(f"[api] victim={loader.backend_name()}  projection={PROJ_SOURCE}")
     print(f"[api] {len(STORE.all_keys())} accounts, tiers={TIERS}")
+    print(f"[api] tier3={'on' if TIER3_ENABLED else 'off'} "
+          f"(dims={TIER3_CFG.dims}, cell_size={TIER3_CFG.cell_size})  "
+          f"defense={'ON' if DEFENSE.enabled else 'off'}")
+    if DEFENSE.enabled:
+        print(f"[api] degradation thresholds {DEFENSE.thresholds} "
+              f"-- answers to suspicious accounts will be rounded off")
+
+    # The tally is rebuilt from the log so a restart mid-experiment does not
+    # hand every attacker a clean slate. The log is the source of truth.
+    try:
+        from detector.cell_index import rebuild_from_log
+
+        restored = rebuild_from_log(
+            STORE, RUN_ID,
+            cell_fn=lambda e: assign_cell(e, TIER3_CFG.cell_size, TIER3_CFG.dims))
+        if restored.total_coverage():
+            CELL_INDEX._cell_ids = restored._cell_ids
+            CELL_INDEX._first_seen = restored._first_seen
+            CELL_INDEX._by_key = restored._by_key
+            CELL_INDEX._requests = restored._requests
+            CELL_INDEX._new_cells = restored._new_cells
+            CELL_INDEX._cell_keys = restored._cell_keys
+            CELL_INDEX._recent = restored._recent
+            print(f"[api] restored ledger: {CELL_INDEX.total_coverage()} cells, "
+                  f"{len(CELL_INDEX.accounts())} accounts")
+    except Exception as exc:  # noqa: BLE001
+        print(f"[api] could not restore ledger ({type(exc).__name__}: {exc})")
     if loader.backend_name() == "stub":
         print("[api] WARNING: stub victim -- results from this run are NOT reportable")
     if PROJECTION is None:
@@ -201,11 +253,20 @@ async def predict(request: Request, caller: Caller = Depends(authenticate)):
     p = probs[0]
     point = PROJECTION.one(feats[0]) if PROJECTION is not None else None
 
-    # Stage 7 attaches here. Until the fightback exists, what the model
-    # believed and what the customer receives are the same thing.
-    degradation_level = 0
-    suspicion = None
-    returned = p
+    # ---- Stage 6: update the live tally -------------------------------
+    # Costs ~3 microseconds against ~50,000 for inference, so this runs on
+    # every request without being felt.
+    if point is not None and TIER3_ENABLED:
+        CELL_INDEX.observe(caller.api_key_id,
+                           assign_cell(point, TIER3_CFG.cell_size, TIER3_CFG.dims),
+                           time.time())
+
+    # ---- Stage 7: the fightback ---------------------------------------
+    # `p` is what the model believed (column 13). `returned` is what the
+    # customer actually receives (column 14). Keeping both is what makes the
+    # defence a measurable fact rather than a claim -- and the top-1 label is
+    # identical in both, at every degradation level.
+    returned, degradation_level, suspicion = DEFENSE.apply(caller.api_key_id, p)
 
     latency = (time.perf_counter() - t0) * 1000
     write_row(
@@ -234,6 +295,13 @@ async def stats():
     s = STORE.stats(run_id=RUN_ID)
     s["run_id"] = RUN_ID
     s["victim_backend"] = loader.backend_name()
+    s["defense_enabled"] = DEFENSE.enabled
+    if TIER3_ENABLED:
+        s.update({
+            "cells_revealed": CELL_INDEX.total_coverage(),
+            "accounts_tracked": len(CELL_INDEX.accounts()),
+            "discoveries_in_window": CELL_INDEX.snapshot()["discoveries_in_window"],
+        })
     return s
 
 
@@ -246,6 +314,8 @@ async def health():
         "projection": PROJ_SOURCE,
         "require_key": REQUIRE_KEY,
         "tiers": TIERS,
+        "tier3": TIER3_ENABLED,
+        "defense": DEFENSE.enabled,
         "reportable": loader.backend_name() == "torch" and PROJECTION is not None,
     }
 
