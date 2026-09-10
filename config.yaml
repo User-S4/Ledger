@@ -6,8 +6,14 @@
 
 run:
   # cal_* = tuning runs. eval_* = reporting runs. See SCHEMA.md.
-  # Override at launch with: LEDGER_RUN_ID=eval_seed2
-  run_id: eval_seed2
+  #
+  # The default is a TUNING run on purpose. Anyone who starts the API to try
+  # something writes into cal_seed1, where it does no harm. The reporting run
+  # is entered deliberately, once, at launch:
+  #     LEDGER_RUN_ID=eval_seed2 python -m uvicorn api.main:app
+  # A default of eval_seed2 means every casual test quietly contaminates the
+  # data the submission depends on.
+  run_id: cal_seed1
   db_path: data/ledger.db
 
 seeds:
@@ -22,6 +28,10 @@ victim:
 
 api:
   host: 127.0.0.1
+  # Team default. Splunk holds 8000 on P3's machine, so P3 overrides at launch:
+  #     python -m uvicorn api.main:app --port 8080
+  # Anyone else hitting "only one usage of each socket address" has something
+  # else on 8000 -- check with: netstat -ano | findstr :8000
   port: 8000
   max_upload_bytes: 2097152      # 2 MB
   require_key: true
@@ -35,11 +45,30 @@ detector:                  # P1 owns these values
   tier1:                   # P3's cheap identity checks, Stage 4
     rate_window_s: 60
     keys_per_subnet_notable: 25
+
   tier2:
     enabled: false
-  tier3:
-    enabled: false
 
-defense:                   # Stage 7, off until it exists
-  enabled: false
+  tier3:
+    enabled: true
+    # FROZEN. Chosen on cal_seed1 (tuning data), then held unchanged for
+    # eval_seed2. Do not adjust after looking at eval results -- that is the
+    # thing SCHEMA.md's run_id rule exists to prevent, and judges penalise it.
+    #
+    # cal_seed1:  attackers 0.309 / 0.375, closest honest (batch) 0.211
+    #             -> 99.5% detection, 0% false alarms
+    # eval_seed2: same threshold, unchanged -> 99.5% detection, 0% false alarms
+    #
+    # The separating gap is roughly 0.08 wide. Real, but narrow -- say so in
+    # the writeup rather than waiting to be asked.
+    threshold: 0.30
+    dims: 8                # measured on 46k real logged embeddings
+    cell_size: 1.0
+    rate_reference: 20.0        # new cells/min that saturates the rate term
+    coverage_reference: 0.25    # share of the map that saturates the coverage term
+    min_requests: 30            # below this, efficiency is meaningless
+
+defense:                   # Stage 7
+  enabled: false           # switch on deliberately; off for baseline runs
   thresholds: [0.5, 0.7, 0.9]    # suspicion -> degradation level 1, 2, 3
+  cooldown_s: 120                # how long a level must stay low before it drops
