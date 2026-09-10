@@ -7,7 +7,8 @@
 # this specific run while still tuning thresholds.
 #
 # Same shape as calibration_seed1.yaml on purpose, different seed — that's what makes
-# it a fair test rather than a different test.
+# it a fair test rather than a different test. Keep both files in sync when tuning
+# volume/params; only the seed should differ.
 
 run_label: evaluation_seed2
 seed: 2
@@ -17,32 +18,32 @@ api_url: http://localhost:8000
 
 mix:
   - profile: casual
-    accounts: 3
-    owner: casual
-    params:
-      rate_per_min: 2.0
-
-  - profile: batch
-    accounts: 1
-    owner: casual
-    params:
-      burst_size: 400
-
-  - profile: bursty
-    accounts: 1
+    accounts: 5
     owner: casual
     params:
       rate_per_min: 3.0
+
+  - profile: batch
+    accounts: 1
+    owner: batch
+    params:
+      burst_size: 600
+
+  - profile: bursty
+    accounts: 2
+    owner: bursty
+    params:
+      rate_per_min: 4.0
       retry_chance: 0.15
 
   - profile: researcher
-    accounts: 2
-    owner: casual
+    accounts: 3
+    owner: researcher
     params:
-      rate_per_min: 1.0
+      rate_per_min: 2.0
 
   - profile: multitenant
-    accounts: 25
+    accounts: 60
     owner: office_acme
     params:
-      rate_per_min_per_account: 1.0
+      rate_per_min_per_account: 2.0

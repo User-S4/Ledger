@@ -6,6 +6,12 @@
 # only controls what traffic gets sent.
 #
 # Nothing reported in the final numbers may be quoted from a run that used this file.
+#
+# UPDATED per P3's review: volume was too low to measure anything against 400
+# attacker accounts / 46,000 requests. Bumped accounts and rates across the board;
+# office went from 25 -> 60 as specifically requested. Also split `owner` into one
+# distinct value per profile (was all "casual", which hid a 15x confidence gap
+# between researcher and casual traffic on P3's test data).
 
 run_label: calibration_seed1
 seed: 1
@@ -13,37 +19,34 @@ duration_seconds: 3600
 speed: 50            # 3600 simulated seconds compressed into 72 real seconds
 api_url: http://localhost:8000
 
-# owner: matches the ground-truth categories named in SCHEMA.md's `keys` table
-# (casual / office_acme / attacker_pool). Kept minimal on purpose — ask P1 before
-# splitting into finer per-profile owner tags.
 mix:
   - profile: casual
-    accounts: 3
-    owner: casual
-    params:
-      rate_per_min: 2.0
-
-  - profile: batch
-    accounts: 1
-    owner: casual
-    params:
-      burst_size: 400
-
-  - profile: bursty
-    accounts: 1
+    accounts: 5
     owner: casual
     params:
       rate_per_min: 3.0
+
+  - profile: batch
+    accounts: 1
+    owner: batch
+    params:
+      burst_size: 600
+
+  - profile: bursty
+    accounts: 2
+    owner: bursty
+    params:
+      rate_per_min: 4.0
       retry_chance: 0.15
 
   - profile: researcher
-    accounts: 2
-    owner: casual
+    accounts: 3
+    owner: researcher
     params:
-      rate_per_min: 1.0
+      rate_per_min: 2.0
 
   - profile: multitenant
-    accounts: 25
+    accounts: 60
     owner: office_acme
     params:
-      rate_per_min_per_account: 1.0
+      rate_per_min_per_account: 2.0
