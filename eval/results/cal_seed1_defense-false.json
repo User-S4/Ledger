@@ -1,0 +1,69 @@
+{
+  "run_id": "cal_seed1",
+  "threshold": 0.3,
+  "dims": 8,
+  "cell_size": 1.0,
+  "total_accounts": 472,
+  "total_cells": 3455,
+  "global_tier3_score": 0.3151,
+  "detection_rate": 0.9950124688279302,
+  "false_alarm_rate": 0.0,
+  "summary": {
+    "attacker_pool": {
+      "accounts": 400,
+      "median_score": 0.3088,
+      "median_cells": 47.0,
+      "median_reqs": 50.0,
+      "flagged": 398,
+      "caught": "100%"
+    },
+    "attacker_solo": {
+      "accounts": 1,
+      "median_score": 0.3749,
+      "median_cells": 1799.0,
+      "median_reqs": 6000.0,
+      "flagged": 1,
+      "caught": "100%"
+    },
+    "batch": {
+      "accounts": 1,
+      "median_score": 0.0127,
+      "median_cells": 44.0,
+      "median_reqs": 600.0,
+      "flagged": 0,
+      "caught": "0%"
+    },
+    "bursty": {
+      "accounts": 2,
+      "median_score": 0.0097,
+      "median_cells": 33.5,
+      "median_reqs": 288.5,
+      "flagged": 0,
+      "caught": "0%"
+    },
+    "casual": {
+      "accounts": 5,
+      "median_score": 0.0075,
+      "median_cells": 26.0,
+      "median_reqs": 182.0,
+      "flagged": 0,
+      "caught": "0%"
+    },
+    "office_acme": {
+      "accounts": 60,
+      "median_score": 0.0069,
+      "median_cells": 24.0,
+      "median_reqs": 120.0,
+      "flagged": 0,
+      "caught": "0%"
+    },
+    "researcher": {
+      "accounts": 3,
+      "median_score": 0.0049,
+      "median_cells": 17.0,
+      "median_reqs": 119.0,
+      "flagged": 0,
+      "caught": "0%"
+    }
+  }
+}

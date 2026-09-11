@@ -1,0 +1,11 @@
+[
+  {
+    "tag": "knockoff|attacker",
+    "n_queries": 6000,
+    "fidelity": 0.7979,
+    "clone_accuracy": 0.7915,
+    "victim_accuracy": 0.926,
+    "holdout_size": 10000,
+    "fidelity_gap": 0.13450000000000006
+  }
+]

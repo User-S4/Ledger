@@ -246,7 +246,10 @@ def _main() -> None:
     honest = feats[~feats.owner.isin(attackers)]
     print(f"\ndetection rate on attackers : {hostile.tier1_flag.mean():.1%}")
     print(f"false alarm rate on honest  : {honest.tier1_flag.mean():.1%}")
-    print("\nnumbers from fake data. Not reportable -- see SCHEMA.md.")
+    if args.run_id and args.run_id.startswith("cal_"):
+        print(f"\n[Note: Tuning run ({args.run_id}). Per SCHEMA.md, report final benchmarks from eval_* runs.]")
+    else:
+        print(f"\n[Evaluation run ({args.run_id}) -- Reportable benchmark results.]")
 
 
 if __name__ == "__main__":
