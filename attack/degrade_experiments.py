@@ -64,6 +64,25 @@ def label_smooth(answers, alpha):
     return ((1.0 - alpha) * answers + alpha / k).astype(np.float32)
 
 
+def label_swap_top2(answers):
+    """Targeted boundary poisoning: swap top-1 winner with top-2 runner-up."""
+    out = answers.copy()
+    for i in range(len(out)):
+        order = np.argsort(out[i])[::-1]
+        top1, top2 = order[0], order[1]
+        out[i, top1], out[i, top2] = out[i, top2], out[i, top1]
+    return out
+
+
+def label_poison_hard(answers):
+    """Hard targeted poisoning: 1.0 on runner-up, 0 elsewhere."""
+    out = np.zeros_like(answers)
+    for i in range(len(out)):
+        runner_up = np.argsort(answers[i])[::-1][1]
+        out[i, runner_up] = 1.0
+    return out
+
+
 # ---------------------------------------------------------------- experiments
 
 def run_one(images, answers, victim, exam_i, exam_l, norm, tag, epochs, seed,
@@ -81,7 +100,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--npz", default=DEFAULT_NPZ)
     ap.add_argument("--which", default="all",
-                    choices=["cutoff", "combined", "smoothing", "all"])
+                    choices=["cutoff", "combined", "smoothing", "poison", "all"])
     ap.add_argument("--cutoffs", type=int, nargs="+", default=[1000, 5000])
     ap.add_argument("--alphas", type=float, nargs="+", default=[0.3, 0.6, 0.9])
     ap.add_argument("--epochs", type=int, default=60)
@@ -135,6 +154,20 @@ def main():
             same = (sm.argmax(axis=1) == answers.argmax(axis=1)).mean()
             print(f"    alpha={alpha}: top-1 preserved on {same:.1%} of answers")
             run_one(images, sm, tag=f"smoothing|alpha{alpha}", **common)
+
+    if a.which in ("poison", "all"):
+        print("\n=== poison: targeted misinformation / label poisoning after N queries ===")
+        print("    (first N clean, then suspicious queries receive swapped top-2 or runner-up)")
+        for n in a.cutoffs:
+            # 1. Boundary swap: swap top 1 and top 2 for queries after cutoff n
+            swapped = answers.copy()
+            swapped[n:] = label_swap_top2(answers[n:])
+            run_one(images, swapped, tag=f"poison|clean{n}+swap_top2", **common)
+
+            # 2. Hard poison: 1.0 on runner-up for queries after cutoff n
+            hard_poisoned = answers.copy()
+            hard_poisoned[n:] = label_poison_hard(answers[n:])
+            run_one(images, hard_poisoned, tag=f"poison|clean{n}+hard_runner_up", **common)
 
     print(f"\nall results appended to {a.results}")
     print(json.dumps(json.loads(Path(a.results).read_text())[-8:], indent=2))
