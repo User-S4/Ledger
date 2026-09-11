@@ -101,6 +101,17 @@ def main():
     print("  " + describe(res))
     print("    ^ compare this to knockoff.py at the same budget: near-identical "
           "fidelity, but every account looked innocent.")
+    if a.epochs > 0:
+        clone = train_clone(imgs, answers, epochs=a.epochs, seed=a.seed, norm_name=norm)
+        res = evaluate(clone, victim, exam_i, exam_l, norm_name=norm,
+                       n_queries=a.budget, tag=f"distributed|{a.pool}|{len(set(keys_used))}keys",
+                       results_path=a.results)
+        print("  " + describe(res))
+        print("    ^ compare this to knockoff.py at the same budget: near-identical "
+              "fidelity, but every account looked innocent.")
+    else:
+        print("    [+] Clone training skipped (--epochs 0). Attack queries delivered successfully.")
+
 
 
 if __name__ == "__main__":
