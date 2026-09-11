@@ -20,27 +20,27 @@ before assuming something works.
 ```
 ledger/
 ├── README.md                        ← Project overview & documentation
-├── requirements.txt                 ← P3: Pinned project dependencies
-├── config.yaml                      ← P3: Global thresholds, seeds, and tier limits
-├── SCHEMA.md                        ← P3: Frozen database log contract
+├── requirements.txt                 ← Pinned project dependencies
+├── config.yaml                      ← Global thresholds, seeds, and tier limits
+├── SCHEMA.md                        ← Frozen database log contract
 │
-├── victim/                          ← P3: Target model & representation space
+├── victim/                          ← Target model & representation space
 │   ├── loader.py                    Pretrained CIFAR-10 ResNet-20 model (PyTorch & stub)
 │   └── embed.py                     Whitened PCA projection (64-dim -> 32-dim space)
-├── api/                             ← P3: Platform service & live defense
+├── api/                             ← Platform service & live defense
 │   ├── main.py                      FastAPI service (/predict, /stats, /health)
 │   ├── logstore.py                  Append-only SQLite storage, WAL mode, timing analysis
 │   ├── defense.py                   Stage 7 active degradation & probability coarsening
 │   ├── keys.py                      API key registry, rate limiters, and provisioning
 │   └── validate.py                  Image validation and schema integrity
-├── detector/                        ← P1: Multi-tiered model extraction defense
+├── detector/                        ← Multi-tiered model extraction defense
 │   ├── tier1_identity.py            Tier 1: Identity, rate utilisation, and subnet clustering
 │   ├── tier2_perclient.py           Tier 2: Per-account behavioral profiling (entropy, low conf)
 │   ├── tier3_ledger.py              Tier 3: Global coverage ledger & spatial suspicion scoring
 │   ├── cell_index.py                Live in-memory hypercube spatial indexing
 │   ├── cells.py                     Embedding spatial bucketing & hash assignment
 │   └── attribution.py               Spike-window attribution to coordinated account pools
-├── attack/                          ← P2: Extraction adversary simulation
+├── attack/                          ← Extraction adversary simulation
 │   ├── knockoff.py                  Single-account high-volume extraction baseline
 │   ├── distributed.py               Distributed extraction across 400 keys & rotating IPs
 │   ├── mixed.py                     Interleaved attack and honest traffic
@@ -56,16 +56,16 @@ ledger/
 │       ├── calibration_seed1.yaml   Tuning only
 │       └── evaluation_seed2.yaml    Reporting only
 ├── eval/                            ← Evaluation benchmarks & reporting
-│   ├── time_criteria.py             P3: Rate-bypass frontier & Tier 3 temporal invariance
-│   ├── tune_thresholds.py           P1: Grid search & sensitivity tuning on calibration logs
+│   ├── time_criteria.py             Rate-bypass frontier & Tier 3 temporal invariance
+│   ├── tune_thresholds.py           Grid search & sensitivity tuning on calibration logs
 │   ├── metrics.py                   Ground-truth recall, precision, and FPR scoring
 │   └── results/                     Structured benchmark artifacts (JSON)
-├── dashboard/                       ← P5: Interactive web dashboard (Chart.js)
-├── docs/                            ← P5: Submission materials & reports
+├── dashboard/                       ← Interactive web dashboard (Chart.js)
+├── docs/                            ← Submission materials & reports
 └── tests/                           ← Automated verification suite (71 tests)
-    ├── test_robustness.py           P3: API resilience, concurrency, and validation
-    ├── test_reproducibility.py      P3/P4: Determinism across seeds and state isolation
-    └── test_time_criteria.py        P3: Timing interval, rate-bypass, and invariance tests
+    ├── test_robustness.py           resilience, concurrency, and validation
+    ├── test_reproducibility.py      Determinism across seeds and state isolation
+    └── test_time_criteria.py        Timing interval, rate-bypass, and invariance tests
 ```
 ---
 
