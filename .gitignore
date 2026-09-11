@@ -54,3 +54,4 @@ attack/data/mixed_*.npz
 # Local experimental detectors
 detector/new*.py
 
+demo_api_cal_seed1_defense-false.log
