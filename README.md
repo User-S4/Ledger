@@ -1,4 +1,4 @@
-# TechFirm - ZeroTrace - Ledger
+# Ledger
 
 Ledger: Multi-tenant, distributed model theft detection and defense architecture.
 
@@ -99,7 +99,9 @@ DEFENSE=true ./run_demo.sh eval_seed2
 ```
 
 > [!TIP]
-> **Proving the Defense:** Run the command once without defense (`./run_demo.sh eval_seed2`) and once with active defense (`DEFENSE=true ./run_demo.sh eval_seed2`). Forensic detection reports are saved to `eval/results/eval_seed2_defense-false.json` and `eval/results/eval_seed2_defense-true.json` (demonstrating 99.5% attacker detection with 0% false alarms). Active decision-boundary poisoning (`swap_top2`) collapses stolen clone fidelity from **~88% down to ~41%** (benchmarked in `eval/results/stage7_surrogate_defended.json`).
+> **Proving the Detector & Defense:** Run the command once without defense (`./run_demo.sh eval_seed2`) and once with active defense (`DEFENSE=true ./run_demo.sh eval_seed2`).
+> - **Tier 3 Spatial Detector:** Catches **99.5% of distributed attack accounts with 0.0% false alarms** on honest traffic (saved to `eval/results/eval_seed2_defense-*.json`), whereas conventional Tier 1 rate/IP monitoring is completely bypassed (0.0% catch rate).
+> - **Ledger's Active Defense:** Decision-boundary poisoning (`swap_top2`) collapses stolen clone agreement from **88.3% down to 11.3%** (reduced to near-random guessing).
 
 ---
 
@@ -260,11 +262,34 @@ http://127.0.0.1:8000/dashboard
 
 ---
 
+## Benchmark Evaluation Results
+
+The official evaluation benchmark (`eval_seed2`, 35,630 requests) contrasts conventional defenses with Ledger's spatial detection and active fightback:
+
+### 1. Detection Performance: Conventional Tier 1 vs. ZeroTrace Tier 3
+
+| Defense Tier | Distributed Attacker Catch Rate (400 keys) | Honest Multi-Tenant False Alarm Rate | Temporal Invariance ($\Delta t \ge 1.5$s) |
+| :--- | :---: | :---: | :---: |
+| **Conventional Tier 1** (Rate & IP Monitoring) | **0.0%** (0 / 401 caught — completely bypassed) | **95.8% – 100.0%** (Corporate NAT & batch penalized) | ❌ Easily evaded by query pacing |
+| **ZeroTrace Tier 3** (Spatial Manifold Ledger) | **99.5%** (399 / 401 caught) | **0.0%** (Zero false alarms across all honest profiles) |  Mathematically invariant to query delay |
+
+> **Key takeaway:** Conventional per-client rate limiters fail catastrophically: an adversary spreading 20,000 queries across 400 keys (~50 queries/key) appears completely harmless, while 60 legitimate corporate office users sharing a single NAT IP are falsely blocked. ZeroTrace Tier 3 tracks global latent manifold coverage expansion across all traffic combined, neutralizing the distributed attack strategy.
+
+### 2. Model Extraction Defense: Undefended vs. Defended Clone Utility
+
+| Extraction Campaign | Undefended Clone Agreement | Defended Clone Agreement (`swap_top2`) | Impact on Adversary |
+| :--- | :---: | :---: | :---: |
+| **Knockoff** (6,000 queries, single key) | **79.0%** (7.9 / 10 agreement) | **17.9%** (1.8 / 10 agreement) | Stolen model utility collapsed |
+| **Distributed** (20,000 queries, 400 keys) | **88.3%** (8.9 / 10 agreement) | **11.3%** (1.1 / 10 agreement) | Reduced to near-random guessing (~10% baseline) |
+
+---
+
 ## Status & Completed Milestones
 
-- **Pipeline Automation (`run_demo.sh`)**: End-to-end execution across victim startup, account provisioning, honest multi-tenant traffic, 400-key distributed attack, offline forensic analysis, and live dashboard serving.
-- **Stage 7 Defense (Boundary Poisoning)**: Verified with Kaggle surrogate evaluation. Undefended 20k clone achieves 83.15% fidelity; active decision-boundary poisoning (`clean1000 + swap_top2`) degrades clone fidelity down to **41.72%** while preserving top-1 label correctness.
+- **Tier 3 Spatial Coverage Detector**: Core innovation tracking global latent representation coverage across multi-tenant traffic. Detects coordinated distributed extraction swarms across 400 accounts with **99.5% detection rate** and **0.0% false alarms** on honest multi-tenant traffic (including 60 corporate accounts behind a single NAT IP). Invariant to query timing delays ($\Delta t \ge 1.5$s).
+- **Stage 7 Active Defense (Boundary Poisoning)**: Verified with full distillation training and surrogate evaluation. Active decision-boundary poisoning (`clean1000 + swap_top2`) collapses stolen clone agreement from **88.3% down to 11.3%** while strictly preserving top-1 label correctness for honest users.
 - **Stage 10 SOC Dashboard**: Fully dynamic, polling `/stats` and `/logs/recent` every second with zero static mockups, interactive simulation controls, and live request audit feed.
+- **Pipeline Automation (`run_demo.sh`)**: End-to-end execution across victim startup, account provisioning, honest multi-tenant traffic, 400-key distributed attack, offline forensic analysis, and live dashboard serving.
 
 ---
 
