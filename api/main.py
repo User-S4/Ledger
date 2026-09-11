@@ -95,6 +95,12 @@ TIER3_CFG = Tier3Config(
 TIER3_ENABLED = bool(_T3.get("enabled", False))
 CELL_INDEX = CellIndex()
 
+# Environment variable overrides config.yaml for defense toggle:
+if "LEDGER_DEFENSE_ENABLED" in os.environ:
+    CFG.setdefault("defense", {})["enabled"] = (
+        os.environ["LEDGER_DEFENSE_ENABLED"].strip().lower() in ("true", "1", "yes")
+    )
+
 DEFENSE = build_policy(
     CFG,
     scorer=(lambda key: score_from_index(CELL_INDEX, key, cfg=TIER3_CFG))

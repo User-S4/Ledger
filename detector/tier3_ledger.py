@@ -264,6 +264,7 @@ def _main() -> None:
     ap.add_argument("--dims", type=int, default=DEFAULT_DIMS)
     ap.add_argument("--cell-size", type=float, default=DEFAULT_CELL_SIZE)
     ap.add_argument("--threshold", type=float, default=0.5)
+    ap.add_argument("--out", default=None, help="Save evaluation summary to JSON")
     a = ap.parse_args()
 
     store = LogStore(a.db)
@@ -272,6 +273,10 @@ def _main() -> None:
     cfg = Tier3Config(cell_size=a.cell_size, dims=a.dims)
 
     keys = list(idx.accounts())
+    if not keys:
+        print(f"0 accounts found for run_id={a.run_id}.")
+        return
+
     scores = {k: score_from_index(idx, k, cfg=cfg) for k in keys}
     print(f"{len(scores)} accounts, {idx.total_coverage()} cells, "
           f"global tier-3 score {score_global(scores):.3f}")
@@ -293,12 +298,36 @@ def _main() -> None:
     print(summary.to_string())
 
     attackers = df.owner.str.startswith("attacker")
+    det_rate = None
+    fa_rate = None
     if attackers.any() and (~attackers).any():
-        print(f"\ndetection rate on attackers : {df[attackers].flagged.mean():.1%}")
-        print(f"false alarm rate on honest  : {df[~attackers].flagged.mean():.1%}")
+        det_rate = float(df[attackers].flagged.mean())
+        fa_rate = float(df[~attackers].flagged.mean())
+        print(f"\ndetection rate on attackers : {det_rate:.1%}")
+        print(f"false alarm rate on honest  : {fa_rate:.1%}")
     else:
         print("\nNo honest accounts in this run -- detection and false-alarm")
         print("rates are meaningless until P4's traffic shares the same log.")
+
+    if a.out:
+        import json
+        out_p = Path(a.out)
+        out_p.parent.mkdir(parents=True, exist_ok=True)
+        res_data = {
+            "run_id": a.run_id,
+            "threshold": a.threshold,
+            "dims": a.dims,
+            "cell_size": a.cell_size,
+            "total_accounts": len(scores),
+            "total_cells": idx.total_coverage(),
+            "global_tier3_score": score_global(scores),
+            "detection_rate": det_rate,
+            "false_alarm_rate": fa_rate,
+            "summary": summary.to_dict(orient="index"),
+        }
+        with open(out_p, "w") as f:
+            json.dump(res_data, f, indent=2)
+        print(f"\nResults written to {a.out}")
 
 
 if __name__ == "__main__":
