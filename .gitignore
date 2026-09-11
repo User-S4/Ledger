@@ -47,6 +47,7 @@ data/*_keys.json
 *.tar.gz
 *.zip
 attack/data/mixed_*.npz
+attack/data/*.npz
 
 # Ignore Windows Zone.Identifier metadata files
 *Zone.Identifier*
