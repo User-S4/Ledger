@@ -86,10 +86,27 @@ pip install -r requirements.txt
 
 ## Running it
 
-`./run_demo.sh` now runs the full pipeline automatically (API, keys, honest traffic,
-attacker traffic, detector) except for the dashboard step, see "Known gaps." The
-manual steps below are the same thing broken out by hand, useful for debugging or
-running just one piece.
+### One-Command Automated Demo
+
+```bash
+# 1. Official Evaluation Benchmark (Undefended Baseline)
+./run_demo.sh eval_seed2
+
+# 2. Official Evaluation Benchmark (With Active Defense / Boundary Poisoning)
+DEFENSE=true ./run_demo.sh eval_seed2
+
+# 3. Tuning / Calibration Run (Default, uses calibration_seed1.yaml)
+./run_demo.sh
+```
+
+> [!TIP]
+> **Proving the Defense:** Run the command once without defense (`./run_demo.sh eval_seed2`) and once with active defense (`DEFENSE=true ./run_demo.sh eval_seed2`). Results are saved separately to `eval/results/eval_seed2_defense-false.json` and `eval/results/eval_seed2_defense-true.json`, proving the drop in clone fidelity from **~88% down to ~41%** under silent decision-boundary poisoning (`swap_top2`).
+
+---
+
+### Manual Component-by-Component Walkthrough
+
+To inspect, debug, or execute individual modules by hand:
 
 ### 1. Start the API
 

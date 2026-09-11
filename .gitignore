@@ -9,10 +9,20 @@ venv/
 ENV/
 env/
 
-# Databases & SQLite logs
+# Pytest & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Databases & SQLite logs (including WAL & SHM)
 *.db
+*.db-wal
+*.db-shm
 *.sqlite
 *.sqlite3
+
+# Runtime logs
+*.log
 
 # PyTorch & Model Checkpoints / Weights
 *.pt
@@ -33,12 +43,14 @@ dist/
 
 # IDE & OS
 .DS_Store
+Thumbs.db
 .idea/
 .vscode/
 *.swp
 *.swo
+*Zone.Identifier*
 
-# data
+# Data directory: keep projection model assets, ignore generated DBs, keys, archives
 data/*
 !data/.gitkeep
 !data/projection.npz
@@ -46,13 +58,10 @@ data/*
 data/*_keys.json
 *.tar.gz
 *.zip
-attack/data/mixed_*.npz
-attack/data/*.npz
 
-# Ignore Windows Zone.Identifier metadata files
-*Zone.Identifier*
+# Attack query artifacts: runtime generated stolen query pairs (often 50MB - 120MB+)
+attack/data/*
+!attack/data/.gitkeep
 
 # Local experimental detectors
 detector/new*.py
-
-demo_api_cal_seed1_defense-false.log
