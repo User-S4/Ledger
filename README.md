@@ -19,29 +19,54 @@ before assuming something works.
 
 ```
 ledger/
-├── README.md                        ← P4
-├── requirements.txt                 ← P3 owns, pinned versions
-├── run_demo.sh                      ← P4, one-command entry point (partial, see below)
-├── config.yaml                      ← P3, thresholds and seeds
-├── SCHEMA.md                        ← P3, frozen hour two
+├── README.md                        ← Project overview & documentation
+├── requirements.txt                 ← P3: Pinned project dependencies
+├── config.yaml                      ← P3: Global thresholds, seeds, and tier limits
+├── SCHEMA.md                        ← P3: Frozen database log contract
 │
-├── victim/                          ← P3 — pretrained CIFAR-10 classifier
-├── api/                             ← P3 — FastAPI: /predict /stats /health
-├── detector/                        ← P1 — the extraction detector
-├── attack/                          ← P2 — knockoff / distributed / mixed attacks
-├── traffic/                         ← P4 — honest traffic simulation
-│   ├── profiles.py                  casual, batch, bursty, researcher
-│   ├── multitenant.py               office behind one IP — key false-positive test
-│   ├── scenario.py                  seeded, replayable traffic runner
+├── victim/                          ← P3: Target model & representation space
+│   ├── loader.py                    Pretrained CIFAR-10 ResNet-20 model (PyTorch & stub)
+│   └── embed.py                     Whitened PCA projection (64-dim -> 32-dim space)
+├── api/                             ← P3: Platform service & live defense
+│   ├── main.py                      FastAPI service (/predict, /stats, /health)
+│   ├── logstore.py                  Append-only SQLite storage, WAL mode, timing analysis
+│   ├── defense.py                   Stage 7 active degradation & probability coarsening
+│   ├── keys.py                      API key registry, rate limiters, and provisioning
+│   └── validate.py                  Image validation and schema integrity
+├── detector/                        ← P1: Multi-tiered model extraction defense
+│   ├── tier1_identity.py            Tier 1: Identity, rate utilisation, and subnet clustering
+│   ├── tier2_perclient.py           Tier 2: Per-account behavioral profiling (entropy, low conf)
+│   ├── tier3_ledger.py              Tier 3: Global coverage ledger & spatial suspicion scoring
+│   ├── cell_index.py                Live in-memory hypercube spatial indexing
+│   ├── cells.py                     Embedding spatial bucketing & hash assignment
+│   └── attribution.py               Spike-window attribution to coordinated account pools
+├── attack/                          ← P2: Extraction adversary simulation
+│   ├── knockoff.py                  Single-account high-volume extraction baseline
+│   ├── distributed.py               Distributed extraction across 400 keys & rotating IPs
+│   ├── mixed.py                     Interleaved attack and honest traffic
+│   ├── degrade_experiments.py       Offline degradation & targeted boundary poisoning
+│   ├── session.py                   Shared request runner with delay & jitter pacing
+│   ├── train_clone.py               Student model knowledge distillation
+│   └── fidelity.py                  Fidelity, accuracy, and theft verification
+├── traffic/                         ← P4: Realistic client traffic simulation
+│   ├── profiles.py                  Personas: casual, batch, bursty, researcher
+│   ├── multitenant.py               60-account office behind one NAT IP (critical false-positive test)
+│   ├── scenario.py                  Seeded, replayable traffic orchestrator
 │   └── scenarios/
-│       ├── calibration_seed1.yaml   tuning only
-│       └── evaluation_seed2.yaml    reporting only
-├── dashboard/                       ← P5 — polls /stats, Chart.js
-├── eval/                            ← P1 produces, P5 renders
-├── docs/                            ← P5 — submission materials
-└── tests/                           ← P3 and P4
+│       ├── calibration_seed1.yaml   Tuning only
+│       └── evaluation_seed2.yaml    Reporting only
+├── eval/                            ← Evaluation benchmarks & reporting
+│   ├── time_criteria.py             P3: Rate-bypass frontier & Tier 3 temporal invariance
+│   ├── tune_thresholds.py           P1: Grid search & sensitivity tuning on calibration logs
+│   ├── metrics.py                   Ground-truth recall, precision, and FPR scoring
+│   └── results/                     Structured benchmark artifacts (JSON)
+├── dashboard/                       ← P5: Interactive web dashboard (Chart.js)
+├── docs/                            ← P5: Submission materials & reports
+└── tests/                           ← Automated verification suite (71 tests)
+    ├── test_robustness.py           P3: API resilience, concurrency, and validation
+    ├── test_reproducibility.py      P3/P4: Determinism across seeds and state isolation
+    └── test_time_criteria.py        P3: Timing interval, rate-bypass, and invariance tests
 ```
-
 ---
 
 ## Requirements
@@ -204,14 +229,6 @@ http://127.0.0.1:8000/dashboard
 - **Stage 10 SOC Dashboard**: Fully dynamic, polling `/stats` and `/logs/recent` every second with zero static mockups, interactive simulation controls, and live request audit feed.
 
 ---
-
-## Detector (run manually, after traffic finishes — it does not watch live)
-
-```
-python -m detector.tier1_identity --db data/ledger.db --run-id eval_seed2
-python -m detector.tier3_ledger   --db data/ledger.db --run-id eval_seed2 \
-    --threshold 0.30 --out eval/results/eval_seed2.json
-```
 
 `tier1_identity` and `tier3_ledger` are the two real entry points (confirmed by
 Person 3) — both take `--db` and `--run-id`. The `--out` flag on `tier3_ledger`
