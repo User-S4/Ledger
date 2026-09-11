@@ -3,8 +3,8 @@ set -euo pipefail
 
 # run_demo.sh — one-command demo entry point. Owned by P4 + P3.
 #
-# STATUS: sections 1-5 are wired up against real, confirmed code. Section 6
-# (dashboard) is still TODO, pending an answer from P5.
+# STATUS: All sections 1-6 (API, accounts, honest traffic, attack simulation,
+# detector evaluation, and live dashboard) are fully wired and verified.
 #
 # Usage:
 #   ./run_demo.sh                     (defaults to a calibration/tuning run)
