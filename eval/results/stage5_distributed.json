@@ -16,5 +16,14 @@
     "victim_accuracy": 0.926,
     "holdout_size": 10000,
     "fidelity_gap": 0.04600000000000004
+  },
+  {
+    "tag": "distributed|attacker|400keys",
+    "n_queries": 20000,
+    "fidelity": 0.4976,
+    "clone_accuracy": 0.4929,
+    "victim_accuracy": 0.926,
+    "holdout_size": 10000,
+    "fidelity_gap": 0.43310000000000004
   }
 ]
