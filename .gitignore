@@ -51,3 +51,6 @@ attack/data/mixed_*.npz
 # Ignore Windows Zone.Identifier metadata files
 *Zone.Identifier*
 
+# Local experimental detectors
+detector/new*.py
+
