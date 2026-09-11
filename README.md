@@ -195,12 +195,12 @@ python -m pytest tests/
 
 The test suite contains 71 automated tests across three specialized test files:
 
-- `tests/test_robustness.py` (P3) checks that the API and LogStore survive malformed inputs, oversized payloads, decompression bombs, fuzzing, concurrent requests, and strict schema violations. It also verifies that degradation never alters top-1 labels.
-- `tests/test_reproducibility.py` (P3/P4) verifies determinism and non-corruption:
+- `tests/test_robustness.py` checks that the API and LogStore survive malformed inputs, oversized payloads, decompression bombs, fuzzing, concurrent requests, and strict schema violations. It also verifies that degradation never alters top-1 labels.
+- `tests/test_reproducibility.py` verifies determinism and non-corruption:
   - Running the same seed twice produces identical logs, embeddings, and detector scores.
   - Different seeds yield distinct datasets (validating the `cal_` vs. `eval_` firewall).
   - Run isolation, projection stability across reloads, and database state preservation across repeated executions.
-- `tests/test_time_criteria.py` (P3) verifies the timing engine:
+- `tests/test_time_criteria.py` verifies the timing engine:
   - Calculation of per-account and global inter-query intervals (`delta_t`) in `LogStore`.
   - Traditional Tier 1 rate-bypass verification under spaced query pacing ($\Delta t \ge 1.5\text{s}$).
   - Mathematical temporal invariance of Tier 3 spatial coverage efficiency under slow-paced queries.
