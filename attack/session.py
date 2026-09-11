@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import base64
 import io
+import random
+import time
 from pathlib import Path
 
 import numpy as np
@@ -33,12 +35,16 @@ def _png_bytes(image_uint8):
 
 
 def run_session(images, key_for, service=None, api=None, ip_for=None,
-                out_npz=None, verbose=True):
+                out_npz=None, delay_s: float = 0.0, jitter_s: float = 0.0,
+                timing_out: dict | None = None, verbose=True):
     """Send every photo, collect every answer.
 
     key_for(i)  -> which api key the i-th request goes out under. This one
                    function is the entire difference between the three attacks.
     ip_for(i)   -> optional; which X-Forwarded-For to claim. None = don't set.
+    delay_s     -> sleep duration between consecutive requests (pacing evasion).
+    jitter_s    -> uniform random variation (+/-) applied to delay_s.
+    timing_out  -> optional dict populated with wall-clock timing metrics.
 
     Provide ONE of:
       api      an ApiTarget (talks to P3's live endpoint, real logs written)
@@ -51,8 +57,14 @@ def run_session(images, key_for, service=None, api=None, ip_for=None,
     answers = np.zeros((len(images), 10), dtype=np.float32)
     keys_used = [None] * len(images)
 
+    start_t = time.time()
+
     if api is not None:
         for i, img in enumerate(images):
+            if i > 0 and delay_s > 0:
+                sleep_t = delay_s + (random.uniform(-jitter_s, jitter_s) if jitter_s > 0 else 0.0)
+                if sleep_t > 0:
+                    time.sleep(sleep_t)
             k = key_for(i)
             keys_used[i] = k
             answers[i] = api.predict_one(
@@ -65,6 +77,14 @@ def run_session(images, key_for, service=None, api=None, ip_for=None,
         answers = service.predict(images)["returned_probs"].astype(np.float32)
         for i in range(len(images)):
             keys_used[i] = key_for(i)
+
+    end_t = time.time()
+    if timing_out is not None:
+        timing_out["start_time"] = start_t
+        timing_out["end_time"] = end_t
+        timing_out["elapsed_s"] = end_t - start_t
+        timing_out["total_queries"] = len(images)
+        timing_out["effective_qps"] = len(images) / max(end_t - start_t, 1e-6)
 
     if out_npz:
         Path(out_npz).parent.mkdir(parents=True, exist_ok=True)

@@ -242,6 +242,63 @@ class LogStore:
                 + (" AND" if where else " WHERE") + " status_code >= 400"),
         }
 
+    def read_timing_df(self, run_id: str | None = None, decode: bool = False):
+        """Read requests log enriched with inter-query intervals (delta_t).
+
+        Adds:
+          delta_t: elapsed seconds since previous request by the SAME api_key_id.
+                   (NaN for the key's first request)
+          global_delta_t: elapsed seconds since previous request across the ENTIRE service.
+                          (NaN for the first overall request)
+        """
+        import pandas as pd
+
+        df = self.read_df(run_id=run_id, decode=decode)
+        if df.empty:
+            df["delta_t"] = pd.Series(dtype=float)
+            df["global_delta_t"] = pd.Series(dtype=float)
+            return df
+
+        # Sort by ts and request_id to guarantee chronological order
+        df = df.sort_values(["ts", "request_id"]).reset_index(drop=True)
+        df["delta_t"] = df.groupby("api_key_id")["ts"].diff()
+        df["global_delta_t"] = df["ts"].diff()
+        return df
+
+    def timing_stats(self, run_id: str | None = None) -> dict[str, Any]:
+        """Summary time criteria for a run: duration, inter-arrival stats, and query rates."""
+        tdf = self.read_timing_df(run_id=run_id, decode=False)
+        if tdf.empty:
+            return {
+                "total_requests": 0,
+                "duration_s": 0.0,
+                "duration_min": 0.0,
+                "mean_account_delta_t": 0.0,
+                "median_account_delta_t": 0.0,
+                "mean_global_delta_t": 0.0,
+                "median_global_delta_t": 0.0,
+                "effective_qps": 0.0,
+            }
+
+        start_ts = float(tdf["ts"].min())
+        end_ts = float(tdf["ts"].max())
+        duration_s = max(0.0, end_ts - start_ts)
+        valid_deltas = tdf["delta_t"].dropna()
+        valid_global = tdf["global_delta_t"].dropna()
+
+        return {
+            "total_requests": int(len(tdf)),
+            "start_ts": start_ts,
+            "end_ts": end_ts,
+            "duration_s": duration_s,
+            "duration_min": duration_s / 60.0,
+            "mean_account_delta_t": float(valid_deltas.mean()) if len(valid_deltas) else 0.0,
+            "median_account_delta_t": float(valid_deltas.median()) if len(valid_deltas) else 0.0,
+            "mean_global_delta_t": float(valid_global.mean()) if len(valid_global) else 0.0,
+            "median_global_delta_t": float(valid_global.median()) if len(valid_global) else 0.0,
+            "effective_qps": float(len(tdf) / duration_s) if duration_s > 0 else float(len(tdf)),
+        }
+
     def close(self) -> None:
         self.flush()
         c = getattr(self._local, "conn", None)

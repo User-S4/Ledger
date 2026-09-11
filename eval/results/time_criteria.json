@@ -1,0 +1,189 @@
+{
+  "rate_bypass_frontier": [
+    {
+      "delta_t_s": 0.1,
+      "effective_rpm": 600.0,
+      "tier_limit_rpm": 60.0,
+      "rate_utilisation": 1.6667,
+      "threshold": 0.8,
+      "tier1_evaded": false
+    },
+    {
+      "delta_t_s": 0.25,
+      "effective_rpm": 240.0,
+      "tier_limit_rpm": 60.0,
+      "rate_utilisation": 1.6667,
+      "threshold": 0.8,
+      "tier1_evaded": false
+    },
+    {
+      "delta_t_s": 0.5,
+      "effective_rpm": 120.0,
+      "tier_limit_rpm": 60.0,
+      "rate_utilisation": 1.6667,
+      "threshold": 0.8,
+      "tier1_evaded": false
+    },
+    {
+      "delta_t_s": 0.75,
+      "effective_rpm": 80.0,
+      "tier_limit_rpm": 60.0,
+      "rate_utilisation": 1.35,
+      "threshold": 0.8,
+      "tier1_evaded": false
+    },
+    {
+      "delta_t_s": 1.0,
+      "effective_rpm": 60.0,
+      "tier_limit_rpm": 60.0,
+      "rate_utilisation": 1.0167,
+      "threshold": 0.8,
+      "tier1_evaded": false
+    },
+    {
+      "delta_t_s": 1.25,
+      "effective_rpm": 48.0,
+      "tier_limit_rpm": 60.0,
+      "rate_utilisation": 0.8167,
+      "threshold": 0.8,
+      "tier1_evaded": false
+    },
+    {
+      "delta_t_s": 1.5,
+      "effective_rpm": 40.0,
+      "tier_limit_rpm": 60.0,
+      "rate_utilisation": 0.6833,
+      "threshold": 0.8,
+      "tier1_evaded": true
+    },
+    {
+      "delta_t_s": 2.0,
+      "effective_rpm": 30.0,
+      "tier_limit_rpm": 60.0,
+      "rate_utilisation": 0.5167,
+      "threshold": 0.8,
+      "tier1_evaded": true
+    },
+    {
+      "delta_t_s": 3.0,
+      "effective_rpm": 20.0,
+      "tier_limit_rpm": 60.0,
+      "rate_utilisation": 0.35,
+      "threshold": 0.8,
+      "tier1_evaded": true
+    },
+    {
+      "delta_t_s": 5.0,
+      "effective_rpm": 12.0,
+      "tier_limit_rpm": 60.0,
+      "rate_utilisation": 0.2167,
+      "threshold": 0.8,
+      "tier1_evaded": true
+    }
+  ],
+  "tier3_temporal_invariance": [
+    {
+      "delta_t_s": 0.2,
+      "duration_min": 0.17,
+      "requests": 50,
+      "unique_cells": 45,
+      "spent_per_cell": 1.111,
+      "efficiency_term": 0.9722,
+      "discovery_rate_cells_min": 270.0,
+      "tier3_score": 0.7867
+    },
+    {
+      "delta_t_s": 1.0,
+      "duration_min": 0.83,
+      "requests": 50,
+      "unique_cells": 45,
+      "spent_per_cell": 1.111,
+      "efficiency_term": 0.9722,
+      "discovery_rate_cells_min": 54.0,
+      "tier3_score": 0.7867
+    },
+    {
+      "delta_t_s": 5.0,
+      "duration_min": 4.17,
+      "requests": 50,
+      "unique_cells": 45,
+      "spent_per_cell": 1.111,
+      "efficiency_term": 0.9722,
+      "discovery_rate_cells_min": 10.8,
+      "tier3_score": 0.5797
+    },
+    {
+      "delta_t_s": 30.0,
+      "duration_min": 25.0,
+      "requests": 50,
+      "unique_cells": 45,
+      "spent_per_cell": 1.111,
+      "efficiency_term": 0.9722,
+      "discovery_rate_cells_min": 1.8,
+      "tier3_score": 0.3772
+    },
+    {
+      "delta_t_s": 120.0,
+      "duration_min": 100.0,
+      "requests": 50,
+      "unique_cells": 45,
+      "spent_per_cell": 1.111,
+      "efficiency_term": 0.9722,
+      "discovery_rate_cells_min": 0.45,
+      "tier3_score": 0.3468
+    }
+  ],
+  "duration_to_succeed": {
+    "budget_queries": 20000,
+    "single_key_unthrottled": {
+      "duration_s": 2000.0,
+      "duration_min": 33.3,
+      "tier1_caught": true,
+      "fidelity_undefended": 0.887,
+      "fidelity_defended": 0.498
+    },
+    "single_key_paced": {
+      "pace_delta_t_s": 1.25,
+      "duration_s": 25000.0,
+      "duration_hours": 6.94,
+      "tier1_caught": false,
+      "tier3_caught": true,
+      "fidelity_defended": 0.498
+    },
+    "distributed_sybil": {
+      "num_keys": 400,
+      "queries_per_key": 50.0,
+      "interval_per_key_s": 40.0,
+      "duration_s": 2000.0,
+      "duration_min": 33.3,
+      "tier1_caught": false,
+      "tier3_caught": true,
+      "fidelity_undefended": 0.887,
+      "fidelity_defended": 0.498
+    }
+  },
+  "empirical_analysis": {
+    "db_path": "data/ledger.db",
+    "run_id": null,
+    "timing_stats": {
+      "total_requests": 45919,
+      "start_ts": 1788983277.3863785,
+      "end_ts": 1788983834.4296265,
+      "duration_s": 557.0432479381561,
+      "duration_min": 9.284054132302602,
+      "mean_account_delta_t": 2.916150958880045,
+      "median_account_delta_t": 2.7635252475738525,
+      "mean_global_delta_t": 0.012131261116297663,
+      "median_global_delta_t": 0.006460428237915039,
+      "effective_qps": 82.43345587611898
+    },
+    "inter_arrival_percentiles_s": {
+      "p25": 2.5548,
+      "p50": 2.7635,
+      "p75": 2.9049,
+      "p90": 3.0754,
+      "p95": 3.2455,
+      "p99": 4.0642
+    }
+  }
+}

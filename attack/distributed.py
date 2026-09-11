@@ -51,6 +51,10 @@ def main():
                     help="how many accounts to spread across (local mode)")
     ap.add_argument("--spread-ip", action="store_true",
                     help="also give each key its own IP (hardest case for the guard)")
+    ap.add_argument("--delay", type=float, default=0.0,
+                    help="delay (seconds) between requests to simulate rate evasion")
+    ap.add_argument("--jitter", type=float, default=0.0,
+                    help="random jitter (+/- seconds) applied to delay")
     ap.add_argument("--epochs", type=int, default=60)
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--results", default="eval/results/stage5_distributed.json")
@@ -63,6 +67,8 @@ def main():
     victim.calibrate(exam_i[:2000], exam_l[:2000])
     norm = victim.norm
 
+    timing_info: dict = {}
+
     if a.local:
         keys = [f"k_{10000 + j}" for j in range(a.n_keys)]
         # Each KEY gets one stable IP -- 400 accounts on 400 machines, reused
@@ -73,6 +79,7 @@ def main():
         answers, keys_used = run_session(
             imgs, key_for=lambda i: keys[i % len(keys)], service=victim,
             ip_for=ip_for,
+            delay_s=a.delay, jitter_s=a.jitter, timing_out=timing_info,
             out_npz=f"attack/data/distributed_{a.pool}_{a.budget}.npz")
     else:
         keys = load_key_secrets(a.keys)
@@ -80,10 +87,12 @@ def main():
         ip_for = (lambda i: _ip_for_key(i % len(keys))) if a.spread_ip else None
         answers, keys_used = run_session(
             imgs, key_for=lambda i: keys[i % len(keys)], api=api, ip_for=ip_for,
+            delay_s=a.delay, jitter_s=a.jitter, timing_out=timing_info,
             out_npz=f"attack/data/distributed_{a.pool}_{a.budget}.npz")
 
+    elapsed_s = timing_info.get("elapsed_s", 0.0)
     print(f"    spread {a.budget} requests across {len(set(keys_used))} keys "
-          f"(~{a.budget // max(1, len(set(keys_used)))} each)")
+          f"(~{a.budget // max(1, len(set(keys_used)))} each) in {elapsed_s:.1f}s")
 
     clone = train_clone(imgs, answers, epochs=a.epochs, seed=a.seed, norm_name=norm)
     res = evaluate(clone, victim, exam_i, exam_l, norm_name=norm,
