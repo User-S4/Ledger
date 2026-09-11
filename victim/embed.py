@@ -1,7 +1,7 @@
 """Turning the model's internal summary into column 12.
 
 The model describes each image with 64 numbers. SCHEMA.md froze column 12
-at 32. This file does that squashing -- and, more importantly, freezes it.
+at 32. This file does that squashing -- and, more importantly it freezes it.
 
 Why freezing matters
     The squashing picks the 32 directions along which images differ most,
