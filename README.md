@@ -101,7 +101,7 @@ DEFENSE=true ./run_demo.sh eval_seed2
 > [!TIP]
 > **Proving the Detector & Defense:** Run the command once without defense (`./run_demo.sh eval_seed2`) and once with active defense (`DEFENSE=true ./run_demo.sh eval_seed2`).
 > - **Tier 3 Spatial Detector:** Catches **99.5% of distributed attack accounts with 0.0% false alarms** on honest traffic (saved to `eval/results/eval_seed2_defense-*.json`), whereas conventional Tier 1 rate/IP monitoring is completely bypassed (0.0% catch rate).
-> - **Ledger's Active Defense:** Decision-boundary poisoning (`swap_top2`) collapses stolen clone agreement from **88.3% down to 11.3%** (reduced to near-random guessing).
+> - **ZeroTrace Active Defense:** Decision-boundary poisoning (`swap_top2`) collapses stolen clone agreement from **88.3% down to 11.3%** (reduced to near-random guessing).
 
 ---
 
@@ -287,8 +287,8 @@ The official evaluation benchmark (`eval_seed2`, 35,630 requests) contrasts conv
 ## Status & Completed Milestones
 
 - **Tier 3 Spatial Coverage Detector**: Core innovation tracking global latent representation coverage across multi-tenant traffic. Detects coordinated distributed extraction swarms across 400 accounts with **99.5% detection rate** and **0.0% false alarms** on honest multi-tenant traffic (including 60 corporate accounts behind a single NAT IP). Invariant to query timing delays ($\Delta t \ge 1.5$s).
-- **Stage 7 Active Defense (Boundary Poisoning)**: Verified with full distillation training and surrogate evaluation. Active decision-boundary poisoning (`clean1000 + swap_top2`) collapses stolen clone agreement from **88.3% down to 11.3%** while strictly preserving top-1 label correctness for honest users.
-- **Stage 10 SOC Dashboard**: Fully dynamic, polling `/stats` and `/logs/recent` every second with zero static mockups, interactive simulation controls, and live request audit feed.
+- **ZeroTrace Active Defense (Boundary Poisoning)**: Verified with full distillation training and surrogate evaluation. Active decision-boundary poisoning (`clean1000 + swap_top2`) collapses stolen clone agreement from **88.3% down to 11.3%** while strictly preserving top-1 label correctness for honest users.
+- **SOC Dashboard**: Fully dynamic, polling `/stats` and `/logs/recent` every second with zero static mockups, interactive simulation controls, and live request audit feed.
 - **Pipeline Automation (`run_demo.sh`)**: End-to-end execution across victim startup, account provisioning, honest multi-tenant traffic, 400-key distributed attack, offline forensic analysis, and live dashboard serving.
 
 ---
