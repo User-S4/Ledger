@@ -110,6 +110,15 @@ def degrade(probs, level: int) -> list[float]:
     return [float(v) for v in out]
 
 
+def swap_top2(probs) -> list[float]:
+    """Boundary poisoning: invert top-1 winner and top-2 runner-up probabilities."""
+    p = np.asarray(probs, dtype=np.float64).reshape(-1).copy()
+    order = np.argsort(p)[::-1]
+    top1, top2 = order[0], order[1]
+    p[top1], p[top2] = p[top2], p[top1]
+    return [float(v) for v in p]
+
+
 class DefensePolicy:
     """Decides a degradation level per account, with hysteresis.
 
@@ -120,11 +129,13 @@ class DefensePolicy:
     """
 
     def __init__(self, scorer=None, thresholds=DEFAULT_THRESHOLDS,
-                 cooldown_s: float = DEFAULT_COOLDOWN_S, enabled: bool = False):
+                 cooldown_s: float = DEFAULT_COOLDOWN_S, enabled: bool = False,
+                 mode: str = "poison"):
         self.scorer = scorer
         self.thresholds = tuple(thresholds)
         self.cooldown_s = cooldown_s
         self.enabled = enabled
+        self.mode = mode
         self._lock = threading.Lock()
         self._level: dict[str, int] = {}
         self._since: dict[str, float] = {}
@@ -168,6 +179,8 @@ class DefensePolicy:
         """
         score = self.score_for(api_key_id, now)
         level = self.level_for(api_key_id, score, now)
+        if level > 0 and self.mode == "poison":
+            return swap_top2(probs), level, score
         return degrade(probs, level), level, score
 
     def reset(self) -> None:
@@ -179,11 +192,14 @@ class DefensePolicy:
 def build_policy(cfg: dict, scorer=None) -> DefensePolicy:
     """Construct from the `defense` block of config.yaml."""
     d = (cfg or {}).get("defense", {}) or {}
+    import os
+    mode = os.environ.get("LEDGER_DEFENSE_MODE", d.get("mode", "poison"))
     return DefensePolicy(
         scorer=scorer,
         thresholds=tuple(d.get("thresholds", DEFAULT_THRESHOLDS)),
         cooldown_s=float(d.get("cooldown_s", DEFAULT_COOLDOWN_S)),
         enabled=bool(d.get("enabled", False)),
+        mode=mode,
     )
 
 

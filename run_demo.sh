@@ -136,10 +136,10 @@ python -m detector.tier3_ledger   --db data/ledger.db --run-id "$RUN_ID" \
     --threshold 0.30 --out "eval/results/${RESULTS_TAG}.json"
 echo "      Results written to eval/results/${RESULTS_TAG}.json"
 
-# ---------------------------------------------------------------- 6. TODO(P5)
-echo "[6/6] Dashboard: NOT WIRED UP YET."
-echo "      Need from P5: is dashboard/index.html a static file we just open in a"
-echo "      browser, or does it need its own local server (and if so, what command)?"
+# ---------------------------------------------------------- 6. dashboard (P5)
+echo "[6/6] Dashboard: LIVE and accessible."
+echo "      Open the ZeroTrace Dashboard in your browser: ${API_URL}/dashboard"
+echo "      (Or open file://${REPO_ROOT}/dashboard/index.html directly)"
 
 echo ""
 echo "Demo run complete for run_id=${RUN_ID}, defense=${DEFENSE}."

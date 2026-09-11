@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZeroTrace Ledger — Security Operations Center</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="soc-container">
+        <!-- Header -->
+        <header class="soc-header">
+            <div class="logo-group">
+                <div class="radar-pulse"></div>
+                <div class="title-block">
+                    <h1>ZEROTRACE <span class="accent-text">LEDGER</span></h1>
+                    <p class="subtitle">Distributed Model Theft Detection & Spatial Defense Operations</p>
+                </div>
+            </div>
+
+            <div class="system-status-bar">
+                <div class="status-pill" id="api-status-pill">
+                    <span class="status-dot green" id="api-status-dot"></span>
+                    <span class="status-label">API: <strong id="api-status-text">CONNECTING...</strong></span>
+                </div>
+                <div class="status-pill">
+                    <span class="status-label">MODEL: <strong>CIFAR-10 ResNet-20</strong></span>
+                </div>
+                <div class="status-pill">
+                    <span class="status-label">RUN: <strong id="run-id-badge">...</strong></span>
+                </div>
+                <button id="toggle-defense-btn" class="defense-toggle-btn active" title="Toggle active defense">
+                    DEFENSE: <span id="defense-btn-state">ON (POISON)</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Interactive Traffic Simulation Controller Bar -->
+        <section class="sim-control-panel">
+            <div class="sim-label-group">
+                <span class="sim-title">LIVE TRAFFIC SIMULATOR</span>
+                <span class="sim-badge" id="sim-status-badge">STATUS: IDLE</span>
+            </div>
+            <div class="sim-buttons-group">
+                <button id="btn-sim-honest" class="sim-btn honest" title="Simulate multi-tenant office and casual requests">
+                    ▶ Stream Honest Traffic
+                </button>
+                <button id="btn-sim-attack" class="sim-btn attack" title="Launch 400-key distributed evasive theft">
+                    ⚠️ Launch 400-Key Attack
+                </button>
+                <button id="btn-sim-stop" class="sim-btn stop" title="Halt current traffic generator">
+                    ⏹ Stop Stream
+                </button>
+                <button id="btn-sim-reset" class="sim-btn reset" title="Clear ledger tally and reset run">
+                    🔄 Reset Run to 0
+                </button>
+            </div>
+        </section>
+
+        <!-- Live Threat Alert Banner -->
+        <div id="threat-alert-banner" class="threat-banner normal">
+            <div class="threat-icon-box" id="threat-icon">🛡️</div>
+            <div class="threat-details">
+                <h3 id="threat-title">SYSTEM SECURE — NORMAL TRAFFIC</h3>
+                <p id="threat-desc">Manifold cell discoveries are within expected baseline rates. No distributed extraction detected.</p>
+            </div>
+            <div class="threat-metric" id="threat-metric-box">
+                <span class="threat-metric-val" id="threat-metric-num">0</span>
+                <span class="threat-metric-lbl">Intercepted Keys</span>
+            </div>
+        </div>
+
+        <!-- Metric KPI Cards -->
+        <section class="kpi-grid">
+            <div class="kpi-card" id="card-requests">
+                <div class="kpi-header">
+                    <span class="kpi-title">TOTAL INGESTION</span>
+                    <span class="kpi-badge">Live API</span>
+                </div>
+                <div class="kpi-value" id="kpi-total-requests">0</div>
+                <div class="kpi-subtext" id="kpi-requests-sub">Live requests processed</div>
+            </div>
+
+            <div class="kpi-card" id="card-accounts">
+                <div class="kpi-header">
+                    <span class="kpi-title">ACTIVE KEY POOL</span>
+                    <span class="kpi-badge">Multi-Tenant</span>
+                </div>
+                <div class="kpi-value" id="kpi-accounts-tracked">0</div>
+                <div class="kpi-subtext" id="kpi-accounts-sub">Distinct client accounts active</div>
+            </div>
+
+            <div class="kpi-card" id="card-threat">
+                <div class="kpi-header">
+                    <span class="kpi-title">THREAT POSTURE</span>
+                    <span class="kpi-badge" id="threat-posture-badge">Spatial Ledger</span>
+                </div>
+                <div class="kpi-value" id="kpi-threat-posture" style="color: var(--accent-green); font-size: 1.45rem;">NOMINAL</div>
+                <div class="kpi-subtext" id="kpi-threat-sub">ZeroTrace Ledger operational state</div>
+            </div>
+
+            <div class="kpi-card" id="card-interceptions">
+                <div class="kpi-header">
+                    <span class="kpi-title">DEFENSE INTERCEPTIONS</span>
+                    <span class="kpi-badge" style="background: rgba(255,23,68,0.15); border-color: rgba(255,23,68,0.3); color: var(--accent-red)">Active Fightback</span>
+                </div>
+                <div class="kpi-value" id="kpi-defense-interceptions" style="color: var(--text-primary);">0</div>
+                <div class="kpi-subtext" id="kpi-interceptions-sub">Silent swap_top2 poisoned responses</div>
+            </div>
+        </section>
+
+        <!-- Dynamic Live Telemetry Grid -->
+        <main class="dashboard-grid">
+            <!-- Chart 1: Cumulative Spatial Manifold Exploration (LIVE) -->
+            <section class="panel-card col-span-2">
+                <div class="panel-header">
+                    <div class="panel-title-group">
+                        <h2>Cumulative Latent Manifold Coverage</h2>
+                        <p>Total representation cells mapped over time (honest plateau vs. attack surge)</p>
+                    </div>
+                    <div class="panel-controls">
+                        <span class="legend-chip honest"><span class="chip-dot"></span> Live Coverage</span>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="coverageChart"></canvas>
+                </div>
+            </section>
+
+            <!-- Chart 2: Real-time Discovery Velocity (LIVE) -->
+            <section class="panel-card">
+                <div class="panel-header">
+                    <div class="panel-title-group">
+                        <h2>Discovery Velocity Stream</h2>
+                        <p>Spike indicates coordinated model exploration</p>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="velocityChart"></canvas>
+                </div>
+            </section>
+
+            <!-- Chart 3: Real-Time Request Throughput RPS (LIVE) -->
+            <section class="panel-card">
+                <div class="panel-header">
+                    <div class="panel-title-group">
+                        <h2>Traffic Throughput (RPS)</h2>
+                        <p>Requests arriving per second live</p>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="rpsChart"></canvas>
+                </div>
+            </section>
+
+            <!-- Live Request Ingestion Stream Logs (Replacing static card) -->
+            <section class="panel-card col-span-2">
+                <div class="panel-header">
+                    <div class="panel-title-group">
+                        <h2>Live Request Ingestion Feed</h2>
+                        <p>Real-time audit log of every incoming query, classification, grid cell, and defense action</p>
+                    </div>
+                    <span class="panel-tag" id="live-rps-tag">STREAMING</span>
+                </div>
+                <div class="table-container log-table-container">
+                    <table class="soc-table log-table" id="live-logs-table">
+                        <thead>
+                            <tr>
+                                <th>TIME</th>
+                                <th>KEY ID</th>
+                                <th>IP</th>
+                                <th>PREDICTION</th>
+                                <th>CELL</th>
+                                <th>DEFENSE</th>
+                                <th>LATENCY</th>
+                            </tr>
+                        </thead>
+                        <tbody id="live-logs-tbody">
+                            <tr class="empty-row">
+                                <td colspan="7">No requests logged in this session. Start a traffic stream to watch queries live.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Suspect Attribution Table (LIVE) -->
+            <section class="panel-card">
+                <div class="panel-header">
+                    <div class="panel-title-group">
+                        <h2>Suspect Attribution & Coordinated Keys</h2>
+                        <p>Live pool of accounts driving anomalous discoveries</p>
+                    </div>
+                    <span class="panel-tag" id="flagged-count-tag">0 Suspect Keys</span>
+                </div>
+                <div class="table-container">
+                    <table class="soc-table" id="flagged-table">
+                        <thead>
+                            <tr>
+                                <th>KEY ID</th>
+                                <th>STATUS</th>
+                                <th>DEFENSE ACTION</th>
+                            </tr>
+                        </thead>
+                        <tbody id="flagged-tbody">
+                            <tr class="empty-row">
+                                <td colspan="3">No suspicious keys identified. All current traffic conforms to expected operational profiles.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="soc-footer">
+            <div class="footer-meta">
+                <span>ZeroTrace Ledger Architecture • IEEE S&P / USENIX Security Benchmark Ready</span>
+                <span>Active Server: <code>http://127.0.0.1:8000/stats</code> (1s poll)</span>
+            </div>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

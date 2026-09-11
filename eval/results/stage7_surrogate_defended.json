@@ -1,0 +1,11 @@
+[
+  {
+    "tag": "surrogate|cifar10_resnet20|degradation2",
+    "n_queries": 20000,
+    "fidelity": 0.8277,
+    "clone_accuracy": 0.8098,
+    "victim_accuracy": 0.926,
+    "holdout_size": 10000,
+    "fidelity_gap": 0.11620000000000008
+  }
+]

@@ -39,7 +39,9 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -53,6 +55,7 @@ from detector.cells import assign_cell  # noqa: E402
 from detector.tier3_ledger import Tier3Config, score_from_index  # noqa: E402
 from victim import loader  # noqa: E402
 from victim.embed import Projection  # noqa: E402
+from api.sim import get_status as get_sim_status, start_simulation, stop_simulation  # noqa: E402
 
 
 # ------------------------------------------------------------------ config
@@ -93,7 +96,12 @@ TIER3_CFG = Tier3Config(
     min_requests=int(_T3.get("min_requests", 30)),
 )
 TIER3_ENABLED = bool(_T3.get("enabled", False))
+from collections import deque
+
+RECENT_REQUESTS_LOG: deque[dict] = deque(maxlen=150)
 CELL_INDEX = CellIndex()
+COORDINATED_ATTACK_POOL: set[str] = set()
+POISONED_COUNT: int = 0
 
 # Environment variable overrides config.yaml for defense toggle:
 if "LEDGER_DEFENSE_ENABLED" in os.environ:
@@ -101,10 +109,53 @@ if "LEDGER_DEFENSE_ENABLED" in os.environ:
         os.environ["LEDGER_DEFENSE_ENABLED"].strip().lower() in ("true", "1", "yes")
     )
 
+
+def is_spatial_attack_active() -> tuple[bool, set[str]]:
+    """Evaluates whether a multi-tenant distributed extraction attack is currently active."""
+    if not TIER3_ENABLED:
+        return False, set()
+    snap = CELL_INDEX.snapshot()
+    recent_global = getattr(CELL_INDEX, "_recent_global", CELL_INDEX._recent)
+    distinct_global_keys = {k for _, k in recent_global}
+
+    is_attack = (
+        CELL_INDEX.total_coverage() >= 45
+        and snap["discoveries_in_window"] >= 30
+        and len(distinct_global_keys) >= 12
+    )
+    return is_attack, distinct_global_keys
+
+
+def get_key_threat_score(api_key_id: str) -> float:
+    """Evaluate threat score across both single-key and multi-tenant distributed patterns."""
+    if not TIER3_ENABLED:
+        return 0.0
+
+    # 1. Individual single-key score (catches heavy single-account / researcher probes)
+    indiv_score = score_from_index(CELL_INDEX, api_key_id, cfg=TIER3_CFG)
+    if indiv_score >= 0.5:
+        return indiv_score
+
+    # 2. Multi-tenant spatial ledger distributed detection
+    is_attack, distinct_global_keys = is_spatial_attack_active()
+    if is_attack:
+        COORDINATED_ATTACK_POOL.update(distinct_global_keys)
+
+    # Key is actively driving global discovery or was isolated as part of the attack pool
+    if api_key_id in COORDINATED_ATTACK_POOL or (is_attack and api_key_id in distinct_global_keys):
+        return 1.0
+
+    # Under active attack, flag keys demonstrating pure exploration (requests == key_cells)
+    if is_attack and CELL_INDEX.efficiency(api_key_id) >= 0.8:
+        COORDINATED_ATTACK_POOL.add(api_key_id)
+        return 1.0
+
+    return indiv_score
+
+
 DEFENSE = build_policy(
     CFG,
-    scorer=(lambda key: score_from_index(CELL_INDEX, key, cfg=TIER3_CFG))
-    if TIER3_ENABLED else None,
+    scorer=get_key_threat_score if TIER3_ENABLED else None,
 )
 
 _proj_path = ROOT / CFG["victim"]["projection"]
@@ -160,6 +211,17 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="Ledger victim API", version="1.0.0", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+if (ROOT / "dashboard").exists():
+    app.mount("/dashboard", StaticFiles(directory=ROOT / "dashboard", html=True), name="dashboard")
 
 
 # ------------------------------------------------------------------ helpers
@@ -262,10 +324,12 @@ async def predict(request: Request, caller: Caller = Depends(authenticate)):
     # ---- Stage 6: update the live tally -------------------------------
     # Costs ~3 microseconds against ~50,000 for inference, so this runs on
     # every request without being felt.
+    cid = None
     if point is not None and TIER3_ENABLED:
-        CELL_INDEX.observe(caller.api_key_id,
-                           assign_cell(point, TIER3_CFG.cell_size, TIER3_CFG.dims),
-                           time.time())
+        obs = CELL_INDEX.observe(caller.api_key_id,
+                                 assign_cell(point, TIER3_CFG.cell_size, TIER3_CFG.dims),
+                                 time.time())
+        cid = obs.get("cell_id")
 
     # ---- Stage 7: the fightback ---------------------------------------
     # `p` is what the model believed (column 13). `returned` is what the
@@ -273,6 +337,9 @@ async def predict(request: Request, caller: Caller = Depends(authenticate)):
     # defence a measurable fact rather than a claim -- and the top-1 label is
     # identical in both, at every degradation level.
     returned, degradation_level, suspicion = DEFENSE.apply(caller.api_key_id, p)
+    if degradation_level > 0:
+        global POISONED_COUNT
+        POISONED_COUNT += 1
 
     latency = (time.perf_counter() - t0) * 1000
     write_row(
@@ -287,6 +354,19 @@ async def predict(request: Request, caller: Caller = Depends(authenticate)):
     )
 
     summary = loader.summarize(returned)
+    
+    # Store live log entry for the real-time request feed
+    RECENT_REQUESTS_LOG.append({
+        "time": time.strftime("%H:%M:%S", time.localtime()),
+        "key_id": caller.api_key_id,
+        "ip": caller.ip,
+        "label": summary["label_name"],
+        "confidence": f"{float(max(returned)):.1%}",
+        "cell_id": f"Cell #{cid}" if cid is not None else "-",
+        "action": "POISONED" if degradation_level > 0 else "CLEAN",
+        "latency_ms": round(latency, 1),
+    })
+
     return {
         "label": summary["label_name"],
         "label_index": summary["label"],
@@ -302,13 +382,81 @@ async def stats():
     s["run_id"] = RUN_ID
     s["victim_backend"] = loader.backend_name()
     s["defense_enabled"] = DEFENSE.enabled
+    s["defense_mode"] = getattr(DEFENSE, "mode", "poison")
     if TIER3_ENABLED:
+        snap = CELL_INDEX.snapshot()
+        is_attack, distinct_global_keys = is_spatial_attack_active()
+        
+        suspicious_keys = set()
+        for k in CELL_INDEX.accounts():
+            sc = DEFENSE.score_for(k)
+            if sc is not None and sc >= (DEFENSE.thresholds[0] if DEFENSE.thresholds else 0.5):
+                suspicious_keys.add(k)
+                
+        if is_attack:
+            suspicious_keys.update(distinct_global_keys)
+            suspicious_keys.update(COORDINATED_ATTACK_POOL)
+            threat_level = "attack"
+        else:
+            threat_level = "normal"
+            
         s.update({
             "cells_revealed": CELL_INDEX.total_coverage(),
             "accounts_tracked": len(CELL_INDEX.accounts()),
-            "discoveries_in_window": CELL_INDEX.snapshot()["discoveries_in_window"],
+            "discoveries_in_window": snap["discoveries_in_window"],
+            "suspicious_accounts": len(suspicious_keys),
+            "threat_level": threat_level,
+            "flagged_accounts": sorted(list(suspicious_keys))[:100],
+            "defense_interceptions": POISONED_COUNT,
+            "sim_status": get_sim_status(),
         })
     return s
+
+
+@app.get("/logs/recent")
+async def recent_logs(limit: int = 40):
+    """Real-time live request feed for the SOC Dashboard."""
+    return list(reversed(list(RECENT_REQUESTS_LOG)))[:limit]
+
+
+@app.post("/defense/toggle")
+async def toggle_defense():
+    DEFENSE.enabled = not DEFENSE.enabled
+    return {"defense_enabled": DEFENSE.enabled, "defense_mode": getattr(DEFENSE, "mode", "poison")}
+
+
+@app.post("/sim/start")
+async def sim_start(request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    mode = body.get("mode", "honest")
+    port = int(CFG["api"]["port"])
+    return start_simulation(mode, port=port)
+
+
+@app.post("/sim/stop")
+async def sim_stop():
+    return stop_simulation()
+
+
+@app.post("/sim/reset")
+async def sim_reset():
+    global RUN_ID, POISONED_COUNT
+    stop_simulation()
+    POISONED_COUNT = 0
+    COORDINATED_ATTACK_POOL.clear()
+    CELL_INDEX.reset()
+    DEFENSE.reset()
+    RECENT_REQUESTS_LOG.clear()
+    RUN_ID = f"live_{int(time.time())}"
+    return {"status": "reset", "run_id": RUN_ID}
+
+
+@app.get("/sim/status")
+async def sim_status():
+    return get_sim_status()
 
 
 @app.get("/health")

@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import sys
 import threading
+import time
 from collections import defaultdict, deque
 
 DEFAULT_WINDOW_S = 300.0     # 5 minutes of history for the discovery rate
@@ -63,6 +64,7 @@ class CellIndex:
         self._cell_keys: dict[int, set[str]] = defaultdict(set)
 
         self._recent: deque[tuple[float, str]] = deque()   # (ts, key) discoveries
+        self._recent_global: deque[tuple[float, str]] = deque()   # (ts, key) globally new discoveries
 
     # ------------------------------------------------------------ writing
 
@@ -78,6 +80,7 @@ class CellIndex:
                 self._cell_ids[cell] = cid
                 self._first_seen.append(ts)
                 globally_new = True
+                self._recent_global.append((ts, api_key_id))
             else:
                 globally_new = False
 
@@ -110,24 +113,29 @@ class CellIndex:
         recent = self._recent
         while recent and recent[0][0] < cutoff:
             recent.popleft()
+        recent_g = self._recent_global
+        while recent_g and recent_g[0][0] < cutoff:
+            recent_g.popleft()
 
     # ------------------------------------------------------------ reading
 
-    def key_coverage(self, api_key_id: str) -> int:
-        with self._lock:
-            return len(self._by_key.get(api_key_id, ()))
-
     def total_coverage(self) -> int:
+        """How many cells have been touched at all, across all accounts."""
         with self._lock:
             return len(self._first_seen)
+
+    def key_coverage(self, api_key_id: str) -> int:
+        """How many cells this account has touched."""
+        with self._lock:
+            return len(self._by_key.get(api_key_id, set()))
 
     def requests_for(self, api_key_id: str) -> int:
         with self._lock:
             return self._requests.get(api_key_id, 0)
 
-    def accounts(self) -> list:
+    def accounts(self) -> list[str]:
         with self._lock:
-            return list(self._by_key)
+            return list(self._by_key.keys())
 
     def efficiency(self, api_key_id: str) -> float:
         """Requests spent per new cell. Low means almost nothing is repeated.
@@ -143,12 +151,12 @@ class CellIndex:
 
     def discovery_rate(self, api_key_id: str | None = None,
                        now: float | None = None) -> float:
-        """New cells per minute, over the window. The signal that moves first."""
+        """New cells per minute inside the sliding window."""
+        now = time.time() if now is None else now
         with self._lock:
-            if now is not None:
-                self._trim(now)
+            self._trim(now)
             if api_key_id is None:
-                n = len(self._recent)
+                n = len(self._recent_global)
             else:
                 n = sum(1 for _, k in self._recent if k == api_key_id)
             return n / (self.window_s / 60.0)
@@ -172,7 +180,7 @@ class CellIndex:
                 "cells_revealed": len(self._first_seen),
                 "accounts_seen": len(self._by_key),
                 "requests_seen": sum(self._requests.values()),
-                "discoveries_in_window": len(self._recent),
+                "discoveries_in_window": len(self._recent_global),
                 "window_s": self.window_s,
             }
 
