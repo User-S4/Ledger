@@ -153,20 +153,55 @@ curl http://127.0.0.1:8000/stats
 
 ---
 
-## Known gaps (as of this writing)
+---
 
-- **`run_demo.sh`** now starts the API, provisions all keys (including attacker
-  accounts), sends both honest and attacker traffic, and runs the detector
-  automatically, writing results into `eval/results/`. Only the dashboard step is
-  still unwired.
-- **The dashboard** (`dashboard/`) isn't served by anything yet. It is unclear whether
-  `index.html` is meant to be opened directly or needs its own local server.
-- **The defense toggle** used by `run_demo.sh` (`LEDGER_DEFENSE_ENABLED`) was an
-  assumed environment variable name. Person 3 has now confirmed it was correct and
-  is adding support for it to `api/main.py`, plus adding the `--out` flag to
-  `detector/tier3_ledger.py` that `run_demo.sh` already expects. **Re-test both once
-  that lands** — this section can be deleted entirely once confirmed working live,
-  not just confirmed in conversation.
+## Interactive Security Operations Center (Dashboard)
+
+The real-time ZeroTrace SOC Dashboard (Person 5) is served directly by the victim API:
+
+```
+http://127.0.0.1:8000/dashboard
+```
+
+### Dashboard Features & Architecture
+
+- **In-Browser Traffic Simulation Controls**:
+  - **`▶ Stream Honest Traffic`**: Background simulation streaming realistic multi-tenant traffic across casual, batch, bursty, researcher, and corporate office profiles (corporate NAT IP `203.0.113.7`).
+  - **`⚠️ Launch 400-Key Attack`**: Simulates the Stage 5 distributed theft campaign across 400 distinct accounts, sweeping the latent manifold boundary.
+  - **`⏹ Stop Stream`**: Halts any active simulation thread.
+  - **`🔄 Reset Run to 0`**: Generates a clean session run ID, flushes the spatial index, and resets counters.
+
+- **Dynamic Threat Alert Banner**:
+  - Automatically flips from `🛡️ SYSTEM SECURE — NORMAL TRAFFIC` to `🚨 DISTRIBUTED EXTRACTION DETECTED — ACTIVE FIGHTBACK` when global manifold coverage expansion, rapid window discoveries, and key dispersion thresholds are breached.
+  - Displays real-time intercepted key counts.
+
+- **Operational KPI Cards**:
+  - **TOTAL INGESTION**: Total live API requests processed in the active session.
+  - **ACTIVE KEY POOL**: Number of distinct client accounts actively tracked.
+  - **THREAT POSTURE**: ZeroTrace Spatial Ledger status (`NOMINAL (SECURE)` in emerald green or `UNDER ATTACK` in pulsing red).
+  - **DEFENSE INTERCEPTIONS**: Real-time running counter of adversarial queries intercepted and silently poisoned via `swap_top2`.
+
+- **Live Streaming Telemetry Charts**:
+  - **Cumulative Latent Manifold Coverage**: Visualizes total representation partitions mapped over time (demonstrating honest usage plateau vs. attack exploration surge).
+  - **Discovery Velocity Stream**: Rolling window discovery rate highlighting coordinated boundary extraction spikes.
+  - **Traffic Throughput (RPS)**: Real-time queries per second.
+
+- **Live Request Ingestion Feed**:
+  - Real-time audit log of every incoming query with timestamp, API key ID, IP, predicted class with top-1 confidence, latent cell ID, defense status (`CLEAN` vs. `POISONED`), and processing latency.
+
+- **Suspect Attribution & Coordinated Keys**:
+  - Real-time table isolating all accounts participating in the coordinated exploration swarm, tagged for silent poisoning.
+
+- **Active Defense Switch**:
+  - Header toggle allowing SOC operators to enable or bypass active boundary poisoning (`DEFENSE: ON (POISON)` vs. `DEFENSE: OFF (BYPASSED)`).
+
+---
+
+## Status & Completed Milestones
+
+- **Pipeline Automation (`run_demo.sh`)**: End-to-end execution across victim startup, account provisioning, honest multi-tenant traffic, 400-key distributed attack, offline forensic analysis, and live dashboard serving.
+- **Stage 7 Defense (Boundary Poisoning)**: Verified with Kaggle surrogate evaluation. Undefended 20k clone achieves 83.15% fidelity; active decision-boundary poisoning (`clean1000 + swap_top2`) degrades clone fidelity down to **41.72%** while preserving top-1 label correctness.
+- **Stage 10 SOC Dashboard**: Fully dynamic, polling `/stats` and `/logs/recent` every second with zero static mockups, interactive simulation controls, and live request audit feed.
 
 ---
 
