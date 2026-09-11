@@ -79,6 +79,13 @@ MAX_UPLOAD = int(CFG["api"]["max_upload_bytes"])
 REQUIRE_KEY = bool(CFG["api"].get("require_key", True))
 
 TIERS = load_tiers(CFG)
+if "LEDGER_RATE_LIMIT_MULTIPLIER" in os.environ:
+    try:
+        mult = float(os.environ["LEDGER_RATE_LIMIT_MULTIPLIER"])
+        TIERS = {k: int(v * mult) for k, v in TIERS.items()}
+    except ValueError:
+        pass
+
 STORE = LogStore(DB_PATH, batch_size=1)
 REGISTRY = KeyRegistry(STORE, TIERS)
 LIMITER = RateLimiter(TIERS)
@@ -179,6 +186,14 @@ async def lifespan(_app: FastAPI):
     if DEFENSE.enabled:
         print(f"[api] degradation thresholds {DEFENSE.thresholds} "
               f"-- answers to suspicious accounts will be rounded off")
+
+    if os.environ.get("LEDGER_CLEAN_RUN", "false").strip().lower() in ("true", "1", "yes"):
+        try:
+            STORE.conn.execute("DELETE FROM requests WHERE run_id = ?", (RUN_ID,))
+            STORE.conn.commit()
+            print(f"[api] clean run: purged pre-existing requests for run_id={RUN_ID}")
+        except Exception as exc:  # noqa: BLE001
+            print(f"[api] warning: could not purge prior run ({exc})")
 
     # The tally is rebuilt from the log so a restart mid-experiment does not
     # hand every attacker a clean slate. The log is the source of truth.
@@ -286,7 +301,8 @@ async def authenticate(request: Request,
 
     caller = Caller(resolved[0], resolved[1], ip)
 
-    if not LIMITER.allow(caller.api_key_id, caller.tier):
+    rate_limit_enabled = os.environ.get("LEDGER_RATE_LIMIT_ENABLED", "true").strip().lower() in ("true", "1", "yes")
+    if rate_limit_enabled and not LIMITER.allow(caller.api_key_id, caller.tier):
         write_row(caller, 429, 0.0, error_code="rate_limited")
         raise HTTPException(
             status_code=429,

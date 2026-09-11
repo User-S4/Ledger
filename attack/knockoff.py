@@ -70,12 +70,15 @@ def main():
     elapsed_s = timing_info.get("elapsed_s", 0.0)
     print(f"    knockoff completed {a.budget} requests in {elapsed_s:.1f}s")
 
-    clone = train_clone(imgs, answers, epochs=a.epochs, seed=a.seed, norm_name=norm)
-    exam_i, exam_l = load_exam()
-    res = evaluate(clone, victim, exam_i, exam_l, norm_name=norm,
-                   n_queries=a.budget, tag=f"knockoff|{a.pool}",
-                   results_path=a.results)
-    print("  " + describe(res))
+    if a.epochs > 0:
+        clone = train_clone(imgs, answers, epochs=a.epochs, seed=a.seed, norm_name=norm)
+        exam_i, exam_l = load_exam()
+        res = evaluate(clone, victim, exam_i, exam_l, norm_name=norm,
+                       n_queries=a.budget, tag=f"knockoff|{a.pool}",
+                       results_path=a.results)
+        print("  " + describe(res))
+    else:
+        print("    [+] Clone training skipped (--epochs 0). Knockoff queries delivered successfully.")
 
 
 if __name__ == "__main__":
