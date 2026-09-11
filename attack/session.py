@@ -113,17 +113,22 @@ class ApiTarget:
         self.timeout = timeout
         self.request_count = 0
 
-    def predict_one(self, png_bytes, key, ip=None):
-        status, body = self._client.predict(
-            png_bytes, key=key, url=self.url, ip=ip, timeout=self.timeout)
-        if status != 200:
+    def predict_one(self, png_bytes, key, ip=None, max_retries: int = 4):
+        for attempt in range(max_retries):
+            status, body = self._client.predict(
+                png_bytes, key=key, url=self.url, ip=ip, timeout=self.timeout)
+            if status == 200:
+                self.request_count += 1
+                order = {c: i for i, c in enumerate(body["classes"])}
+                vec = np.zeros(10, dtype=np.float32)
+                for name in self.CLASS_ORDER:
+                    vec[self.CLASS_ORDER.index(name)] = body["probabilities"][order[name]]
+                return vec
+            if status == 429 and attempt < max_retries - 1:
+                # Exponential backoff on rate limit
+                time.sleep(0.5 * (2 ** attempt))
+                continue
             raise RuntimeError(f"API returned {status}: {body.get('detail')}")
-        self.request_count += 1
-        order = {c: i for i, c in enumerate(body["classes"])}
-        vec = np.zeros(10, dtype=np.float32)
-        for name in self.CLASS_ORDER:
-            vec[self.CLASS_ORDER.index(name)] = body["probabilities"][order[name]]
-        return vec
 
 
 def load_key_secrets(path):

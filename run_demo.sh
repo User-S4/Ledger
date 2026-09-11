@@ -52,7 +52,7 @@ trap cleanup EXIT
 # ---------------------------------------------------------- 1. start API
 echo "[1/6] Starting victim API (run_id=${RUN_ID}, defense=${DEFENSE})..."
 LEDGER_RUN_ID="$RUN_ID" LEDGER_DEFENSE_ENABLED="$DEFENSE" \
-    LEDGER_RATE_LIMIT_MULTIPLIER="50" LEDGER_CLEAN_RUN="true" \
+    LEDGER_RATE_LIMIT_MULTIPLIER="150" LEDGER_CLEAN_RUN="true" \
     python -m uvicorn api.main:app --host "$HOST" --port "$PORT" \
     > "demo_api_${RESULTS_TAG}.log" 2>&1 &
 API_PID=$!
