@@ -270,7 +270,7 @@ The official evaluation benchmark (`eval_seed2`, 35,630 requests) contrasts conv
 
 | Defense Tier | Distributed Attacker Catch Rate (400 keys) | Honest Multi-Tenant False Alarm Rate | Temporal Invariance ($\Delta t \ge 1.5$s) |
 | :--- | :---: | :---: | :---: |
-| **Conventional Tier 1** (Rate & IP Monitoring) | **0.0%** (0 / 401 caught — completely bypassed) | **95.8% – 100.0%** (Corporate NAT & batch penalized) | ❌ Easily evaded by query pacing |
+| **Conventional Tier 1** (Rate & IP Monitoring) | **0.0%** (0 / 401 caught — completely bypassed) | **95.8%** (68 / 71 honest accounts falsely flagged) | ❌ Easily evaded by query pacing |
 | **ZeroTrace Tier 3** (Spatial Manifold Ledger) | **99.5%** (399 / 401 caught) | **0.0%** (Zero false alarms across all honest profiles) |  Mathematically invariant to query delay |
 
 > **Key takeaway:** Conventional per-client rate limiters fail catastrophically: an adversary spreading 20,000 queries across 400 keys (~50 queries/key) appears completely harmless, while 60 legitimate corporate office users sharing a single NAT IP are falsely blocked. ZeroTrace Tier 3 tracks global latent manifold coverage expansion across all traffic combined, neutralizing the distributed attack strategy.
